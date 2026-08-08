@@ -246,11 +246,17 @@ public class LiteDownloaderImpl implements LiteDownloader {
 	}
 
 	private Void handleErr(Task t, Throwable e) {
-		Throwable cause = e instanceof CompletionException ? e.getCause() : e;
+		// Unwrap nested CompletionExceptions (the future chain wraps each rethrow) so the
+		// clear message — e.g. "Chunk 12 failed after 3 attempts" — reaches the UI.
+		Throwable cause = e;
+		while (cause instanceof CompletionException && cause.getCause() != null) {
+			cause = cause.getCause();
+		}
 		try {
 			if (tasks.containsKey(t.videoId())) {
-				notify(t.videoId(), callback -> callback.onError(cause instanceof Exception ? (Exception) cause : new Exception(cause)));
-				clean(tasks.remove(t.videoId()));
+				final Throwable finalCause = cause;
+				notify(t.videoId(), callback -> callback.onError(finalCause instanceof Exception ? (Exception) finalCause : new Exception(finalCause)));
+				cleanAfterFailure(tasks.remove(t.videoId()));
 			}
 		} finally {
 			clearCallback(t.videoId());
@@ -285,6 +291,18 @@ public class LiteDownloaderImpl implements LiteDownloader {
 		if (task.audio() != null) FileUtils.deleteQuietly(tmp(task, "_a"));
 		if (task.video() != null && task.audio() != null) FileUtils.deleteQuietly(tmp(task, "_m"));
 		if (task.muxedFallback() != null) FileUtils.deleteQuietly(tmp(task, "_f"));
+		FileUtils.deleteQuietly(outputFile(task));
+	}
+
+	/**
+	 * Removes only the output and merge scratch files after a failed download. The partial
+	 * media temp files ("_v"/"_a"/"_f") are kept together with their MMKV resume bits, so a
+	 * retry of the same stream resumes from the last successful chunk instead of restarting
+	 * from zero (deleting them would leave stale bits over a fresh file and corrupt the retry).
+	 */
+	private void cleanAfterFailure(Task task) {
+		if (task == null) return;
+		FileUtils.deleteQuietly(tmp(task, "_m"));
 		FileUtils.deleteQuietly(outputFile(task));
 	}
 
