@@ -250,7 +250,9 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	@Override
 	public void onConfigurationChanged(@NonNull Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
-		player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
+		// The activity is not recreated (see configChanges in the manifest); keep the
+		// player's rotation/fullscreen state in sync with the new configuration.
+		if (player != null) player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
