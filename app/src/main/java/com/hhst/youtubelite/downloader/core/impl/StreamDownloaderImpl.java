@@ -1,5 +1,12 @@
 package com.hhst.youtubelite.downloader.core.impl;
 
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getAndroidUserAgent;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getIosUserAgent;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isAndroidStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isIosStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebEmbeddedPlayerStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebStreamingUrl;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -13,6 +20,7 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.security.MessageDigest;
 import java.util.BitSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -39,6 +47,24 @@ import okhttp3.Response;
  */
 @Singleton
 public class StreamDownloaderImpl implements StreamDownloader {
+	/**
+	 * User-Agent of the YouTube VR (Oculus) client. Streaming URLs issued to the ANDROID_VR
+	 * client must be requested with this User-Agent: googlevideo validates that the User-Agent
+	 * matches the client the URL was generated for and answers HTTP 403 on a mismatch (the
+	 * regular Android app User-Agent is rejected for ANDROID_VR URLs). Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	private static final String YOUTUBE_ANDROID_VR_USER_AGENT =
+			"com.google.android.apps.youtube.vr.oculus/1.65.10 "
+					+ "(Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
+	/**
+	 * Desktop Chrome User-Agent for web-client (WEB / WEB_EMBEDDED_PLAYER) streaming URLs.
+	 * The Android WebView default User-Agent is a known trigger for HTTP 403 responses from
+	 * googlevideo on web-client URLs.
+	 */
+	private static final String YOUTUBE_WEB_USER_AGENT =
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+					+ "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 	private final OkHttpClient client;
 	private final MMKV mmkv;
 	private final ThreadPoolExecutor executor;
@@ -64,6 +90,66 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		dispatcher.setMaxRequests(24);
 		dispatcher.setMaxRequestsPerHost(12);
 		return dispatcher;
+	}
+
+	/**
+	 * Checks if a streaming URL was issued to the {@code ANDROID_VR} (YouTube VR) client.
+	 * The library's {@code isAndroidStreamingUrl} also matches {@code ANDROID_VR} URLs
+	 * (substring match on {@code &c=ANDROID}), so this must be checked before it: the VR
+	 * client has its own dedicated User-Agent. Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	private static boolean isAndroidVrStreamingUrl(@NonNull String url) {
+		return url.contains("&c=ANDROID_VR") || url.contains("?c=ANDROID_VR");
+	}
+
+	/**
+	 * Builds the request headers googlevideo expects for a streaming URL, per the client the
+	 * URL was issued to. Without the matching User-Agent (and, for web-client URLs, the
+	 * browser headers), googlevideo answers HTTP 403 and the download fails — this is what
+	 * happens to the non-SABR ANDROID_VR / iOS / WEB streams the extractor now serves for
+	 * resolutions above 360p. Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	static Map<String, String> clientHeaders(@NonNull String url) {
+		Map<String, String> headers = new LinkedHashMap<>();
+		boolean web = isWebStreamingUrl(url) || isWebEmbeddedPlayerStreamingUrl(url);
+		if (web) {
+			headers.put("Origin", "https://www.youtube.com");
+			headers.put("Referer", "https://www.youtube.com");
+			headers.put("Sec-Fetch-Dest", "empty");
+			headers.put("Sec-Fetch-Mode", "cors");
+			headers.put("Sec-Fetch-Site", "cross-site");
+			headers.put("User-Agent", YOUTUBE_WEB_USER_AGENT);
+			return headers;
+		}
+		String userAgent;
+		if (isAndroidVrStreamingUrl(url)) {
+			userAgent = YOUTUBE_ANDROID_VR_USER_AGENT;
+		} else if (isAndroidStreamingUrl(url)) {
+			userAgent = getAndroidUserAgent(null);
+		} else if (isIosStreamingUrl(url)) {
+			userAgent = getIosUserAgent(null);
+		} else {
+			userAgent = YOUTUBE_WEB_USER_AGENT;
+		}
+		headers.put("User-Agent", userAgent);
+		return headers;
+	}
+
+	private static void applyClientHeaders(@NonNull Request.Builder builder, @NonNull String url) {
+		for (Map.Entry<String, String> header : clientHeaders(url).entrySet()) {
+			builder.header(header.getKey(), header.getValue());
+		}
+	}
+
+	private static long parseContentLength(@Nullable String value) {
+		if (value == null) return -1;
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
 	}
 
 	private static long chunkLength(int idx, int totalChunks, long partSize, long totalLen) {
@@ -109,13 +195,17 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	private void runTask(TaskContext task) {
 		RandomAccessFile raf = null;
 		try {
-			// 1. fetch metadata
-			final long total;
-			final boolean range;
-			try (Response head = client.newCall(new Request.Builder().url(task.url).head().build()).execute()) {
-				if (!head.isSuccessful()) throw new IOException("HEAD " + head.code());
-				total = Long.parseLong(head.header("Content-Length", "-1"));
-				range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
+			// 1. fetch metadata; a failed HEAD (e.g. HTTP 403 without the client User-Agent)
+			// falls back to a single full GET, which carries the client headers below.
+			long total = -1;
+			boolean range = false;
+			Request.Builder headBuilder = new Request.Builder().url(task.url).head();
+			applyClientHeaders(headBuilder, task.url);
+			try (Response head = client.newCall(headBuilder.build()).execute()) {
+				if (head.isSuccessful()) {
+					total = parseContentLength(head.header("Content-Length"));
+					range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
+				}
 			}
 
 			// 2. calculate chunk count
@@ -179,6 +269,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		String range = rangeSupported && totalLen > 0 ? "bytes=" + start + "-" + end : null;
 
 		Request.Builder rb = new Request.Builder().url(task.url);
+		applyClientHeaders(rb, task.url);
 		if (range != null) rb.header("Range", range);
 
 		try (Response resp = client.newCall(rb.build()).execute()) {
