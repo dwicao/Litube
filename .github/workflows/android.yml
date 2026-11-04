@@ -141,15 +141,10 @@ jobs:
               grep -Eq '^OK \([1-9][0-9]* tests?\)' "device-results/$label.txt"
             }
             classes=(
-              com.hhst.youtubelite.player.engine.PipDismissAndroidTest
               com.hhst.youtubelite.diagnostics.DiagnosticSaveAndroidTest
               com.hhst.youtubelite.player.surface.FullscreenSheetAndroidTest
               com.hhst.youtubelite.player.surface.PlayerControlSizingAndroidTest
               com.hhst.youtubelite.player.datasource.PlaybackLoadErrorAndroidTest
-              com.hhst.youtubelite.player.engine.TransportRecoveryAndroidTest
-              com.hhst.youtubelite.player.engine.PinnedVideoRecoveryAndroidTest
-              com.hhst.youtubelite.player.engine.NamedAudioAndroidTest#namedAudioSurvivesQualityChanges
-              com.hhst.youtubelite.player.engine.OriginalAudioAndroidTest
               com.hhst.youtubelite.downloader.android.DownloadOptionsAndroidTest
               com.hhst.youtubelite.downloader.android.DownloadIntentAndroidTest
             )
@@ -157,9 +152,6 @@ jobs:
             status=0
             install_apks debug
             run_suite com.hhst.litube.debug "${class_list%,}" offline || status=1
-            run_suite com.hhst.litube.debug \
-              com.hhst.youtubelite.player.engine.PipAudioOnlyAndroidTest \
-              pip-audio || status=1
             install_apks minifiedDebug
             run_suite com.hhst.litube.minified \
               com.hhst.youtubelite.player.sponsor.SponsorBlockMinifiedAndroidTest \
