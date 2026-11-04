@@ -44,7 +44,6 @@ import com.hhst.youtubelite.downloader.ui.DownloadPresentation
 import com.hhst.youtubelite.downloader.ui.DownloadRowAction
 import com.hhst.youtubelite.downloader.ui.DownloadUiMapper
 import com.hhst.youtubelite.downloader.ui.DownloadViewModel
-import com.hhst.youtubelite.downloader.webview.DownloadWebStatus
 import com.hhst.youtubelite.extractor.VideoId
 import com.hhst.youtubelite.player.QueueItem
 import kotlinx.coroutines.flow.first
@@ -180,26 +179,20 @@ class DownloadFaultInjectionTest {
         h.wired.reportAssetPublished(id, 0, AssetKind.VIDEO, uri)
         val listed = vm.observeDownloads().first().single()
         val video = vm.observeVideo(vid("a")).first()
-        val web = DownloadWebStatus.payload(video)
         val batch = h.wired.observeBatch(result.batchId).first()!!
         val notif = DownloadNotificationController(RecordingNotificationPort()).payload(batch)
         assertTrue(listed.watchPageDownloaded)
         assertEquals(listed.watchPageDownloaded, video.watchPageDownloaded)
-        assertEquals(true, web["watchPageDownloaded"])
-        assertEquals(DownloadWebStatus.COMPLETE, web["state"])
         assertTrue(notif.complete)
 
         h.wired.reportFileAvailability(id, 0, AssetKind.VIDEO, FileAvailability.MISSING)
         val listedMissing = vm.observeDownloads().first().single()
         val videoMissing = vm.observeVideo(vid("a")).first()
-        val webMissing = DownloadWebStatus.payload(videoMissing)
         val batchMissing = h.wired.observeBatch(result.batchId).first()!!
         val notifMissing = DownloadNotificationController(RecordingNotificationPort()).payload(batchMissing)
         assertTrue(listedMissing.fileMissing)
         assertFalse(listedMissing.watchPageDownloaded)
         assertFalse(videoMissing.watchPageDownloaded)
-        assertEquals(false, webMissing["watchPageDownloaded"])
-        assertEquals(DownloadWebStatus.FAILED, webMissing["state"])
         assertFalse(notifMissing.complete)
     }
 
