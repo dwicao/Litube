@@ -1,7 +1,7 @@
 package com.hhst.youtubelite.downloader.core
 
-import com.hhst.youtubelite.browser.PageKind
-import com.hhst.youtubelite.browser.UrlPolicy
+import com.hhst.youtubelite.nativebrowse.NativePageKind
+import com.hhst.youtubelite.nativebrowse.NativeUrlPolicy
 import com.hhst.youtubelite.extractor.VideoId
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -38,8 +38,8 @@ object DownloadShareParser {
         if (candidate.isNullOrBlank()) return null
         return URL_RE.findAll(candidate)
             .map { it.value }
-            .firstOrNull { UrlPolicy.isAllowedUrl(it) && PageKind.of(it) != "unknown" }
-            ?: candidate.trim().takeIf { UrlPolicy.isAllowedUrl(it) && PageKind.of(it) != "unknown" }
+            .firstOrNull { NativeUrlPolicy.isAllowedUrl(it) && NativePageKind.of(it) != "unknown" }
+            ?: candidate.trim().takeIf { NativeUrlPolicy.isAllowedUrl(it) && NativePageKind.of(it) != "unknown" }
     }
 
     fun playlistId(url: String?): String? {
@@ -51,9 +51,9 @@ object DownloadShareParser {
     fun isPlaylistOnly(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         if (VideoId.parse(url) != null) return false
-        if (!UrlPolicy.isAllowedUrl(url)) return false
+        if (!NativeUrlPolicy.isAllowedUrl(url)) return false
         if (playlistId(url) != null) return true
-        val kind = PageKind.of(url)
+        val kind = NativePageKind.of(url)
         return kind == "playlist" || kind.startsWith("playlist/")
     }
 

@@ -13,8 +13,6 @@ import java.net.URI
 import android.app.ActivityManager
 import com.google.gson.Gson
 import com.google.gson.JsonParser
-import com.hhst.youtubelite.core.WebViewTimerOccupancy
-import com.hhst.youtubelite.core.WebViewTimerOwner
 import org.schabi.newpipe.extractor.services.youtube.streams.ClientProfile
 import org.schabi.newpipe.extractor.services.youtube.streams.ExtractionContext
 import org.schabi.newpipe.extractor.services.youtube.streams.InnertubeAuth
@@ -24,13 +22,12 @@ import java.io.IOException
 /** BgUtils adapter. Transport uses the immutable extraction context. */
 class PoTokenProvider(
     context: Context,
-    private val timers: WebViewTimerOccupancy = WebViewTimerOccupancy.NOOP,
     private val heavy: HeavyJsGate = HeavyJsGate(),
 ) : CorePoTokenProvider {
     private val app = context.applicationContext
     private val lock = Any()
     private val gson = Gson()
-    private var runtime: HiddenJavascriptRuntime? = null
+    private var runtime: JavascriptRuntime? = null
     private var scope = ""
     private var expires = 0L
     private var refreshAt = 0L
@@ -89,12 +86,13 @@ class PoTokenProvider(
         fun remaining(): Long = (15_000 - (System.nanoTime() - start) / 1_000_000).coerceAtMost(context.remainingMillis()).also {
             if (it <= 0) throw IOException("PO_INITIALIZATION_TIMEOUT")
         }
-        fun loadedRuntime(): HiddenJavascriptRuntime {
-            return runtime ?: HiddenJavascriptRuntime(app, timers, WebViewTimerOwner.POTOKEN, context.session.userAgent).also {
-                runtime = it
-                val bundle = app.assets.open("potoken/bgutils.js").bufferedReader().use { input -> input.readText() }
-                it.evaluate(bundle + "\n'loaded'", remaining(), context)
-            }
+        fun loadedRuntime(): JavascriptRuntime {
+            return runtime ?: SandboxRuntime.create(app, context)
+                ?.also {
+                    runtime = it
+                    val bundle = app.assets.open("potoken/bgutils.js").bufferedReader().use { input -> input.readText() }
+                    it.evaluate(bundle + "\n'loaded'", remaining(), context)
+                } ?: throw java.io.IOException("PO_RUNTIME_UNAVAILABLE")
         }
         fun pairedChallenge(config: NanoJsonObject): JsonObject? {
             config.remove("_BG_CHALLENGE")?.let {

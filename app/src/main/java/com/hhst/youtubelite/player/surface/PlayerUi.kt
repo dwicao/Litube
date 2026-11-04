@@ -119,7 +119,7 @@ object PlayerUi {
 
     /**
      * Embedded offset from the window top. The overlay lives one level above
-     * the inset-padded WebView container, so the page player's slot is the
+     * the inset-padded content container, so the page player's slot is the
      * system-bar inset plus its viewport-relative top — reported live by
      * player-hook.js (masthead ≈ 48 dp before the first report lands).
      * Fullscreen is flush.
@@ -153,7 +153,7 @@ object PlayerUi {
 
     data class EmbeddedBounds(val left: Int, val top: Int?, val width: Int, val height: Int)
 
-    /** Convert the page viewport (including zoom/desktop mode) into the WebView's actual width. */
+    /** Convert the page viewport (including zoom/desktop mode) into the surface's actual width. */
     fun embeddedBounds(state: PlayerUiState, viewportWidthDp: Int): EmbeddedBounds {
         val available = viewportWidthDp.coerceAtLeast(1)
         val scale = state.pageViewportWidthDp?.takeIf { it > 0 }?.let { available.toDouble() / it } ?: 1.0

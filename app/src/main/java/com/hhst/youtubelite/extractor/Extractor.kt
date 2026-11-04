@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 import java.io.IOException
-import android.webkit.WebView
 import org.schabi.newpipe.extractor.services.youtube.streams.ExtractionContext
 import org.schabi.newpipe.extractor.services.youtube.streams.ClientProfile
 import org.schabi.newpipe.extractor.services.youtube.streams.StreamDemand
@@ -33,7 +32,6 @@ class Extractor(
     private val recoveries = ConcurrentHashMap<String, Pair<Inflight, Long>>()
     private val selectionLock = Any()
     private var selectedPreparation: Inflight? = null
-    fun installBrowserCapture(view: WebView, generation: () -> Long) { host?.installBrowserCapture(view, generation) }
     /** Blocking; compiles the solver and opens connections for an already configured session. */
     fun initialize(): Boolean = host?.initialize() ?: false
     fun sessionStamp(): String = host?.scopeHint().orEmpty()

@@ -9,8 +9,6 @@ import android.os.Build
 import androidx.javascriptengine.JavaScriptSandbox
 import com.google.gson.Gson
 import com.google.gson.JsonParser
-import com.hhst.youtubelite.core.WebViewTimerOccupancy
-import com.hhst.youtubelite.core.WebViewTimerOwner
 import org.schabi.newpipe.extractor.services.youtube.streams.ChallengeSolver
 import org.schabi.newpipe.extractor.services.youtube.streams.ExtractionContext
 import java.io.File
@@ -21,7 +19,6 @@ import java.util.concurrent.TimeUnit
 /** EJS 0.8.0 with compiled solver retention; cache keys include full variant URL and source hash. */
 class AndroidChallengeSolver(
     context: Context,
-    private val timers: WebViewTimerOccupancy,
     private val heavy: HeavyJsGate,
 ) : ChallengeSolver {
     private val app = context.applicationContext
@@ -40,10 +37,7 @@ class AndroidChallengeSolver(
 
     init {
         reaper.scheduleWithFixedDelay({ lock.tryRunIdle {
-            // A compiled sandbox solver is cheap to keep and spares the next video a cold compile;
-            // the WebView fallback peaks near 400 MiB, so it keeps the short idle lifetime.
-            val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && runtime is SandboxRuntime) SANDBOX_IDLE_MS else FALLBACK_IDLE_MS
-            if (runtime != null && System.currentTimeMillis() - lastUsed >= idle) release()
+            if (runtime != null && System.currentTimeMillis() - lastUsed >= SANDBOX_IDLE_MS) release()
         } }, 60, 60, TimeUnit.SECONDS)
     }
 
@@ -87,11 +81,11 @@ class AndroidChallengeSolver(
     }
 
     /**
-     * Compiles [playerUrl] ahead of the first solve. Sandbox only: the WebView fallback is too heavy
-     * to start speculatively, so an unsupported sandbox leaves the first solve to do it on demand.
+     * Compiles [playerUrl] ahead of the first solve. Sandbox only; an
+     * unsupported sandbox leaves the first solve to do it on demand.
      */
     fun initialize(playerUrl: String, context: ExtractionContext): Boolean = lock.run(context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || lowRam || runtime is RemoteEjsRuntime || !JavaScriptSandbox.isSupported()) return@run false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || lowRam || !JavaScriptSandbox.isSupported()) return@run false
         val start = System.nanoTime()
         try {
             val source = source(playerUrl, context)
@@ -137,13 +131,7 @@ class AndroidChallengeSolver(
             } else null
             if (runtime == null) {
                 if (!allowFallback) return
-                runtime = if (EjsRuntimeProcess.canIsolate(app)) {
-                    RemoteEjsRuntime(app, execution.session.userAgent)
-                } else {
-                    // Old providers cannot isolate their data directory across processes.
-                    execution.diagnostics.event("js", "EJS", "webview-local-fallback", 0, 0)
-                    HiddenJavascriptRuntime(app, timers, WebViewTimerOwner.EJS, execution.session.userAgent)
-                }
+                runtime = RemoteEjsRuntime(app, execution.session.userAgent)
             }
         }
         val libraries = app.assets.open("ejs/yt.solver.lib.min.js").bufferedReader().use { it.readText() } +
@@ -199,7 +187,6 @@ class AndroidChallengeSolver(
 
     private companion object {
         const val SANDBOX_IDLE_MS = 10 * 60_000L
-        const val FALLBACK_IDLE_MS = 2 * 60_000L
     }
 }
 

@@ -15,7 +15,7 @@ class ExtensionManager(private val store: PrefStore) {
 
     /**
      * Notifies [listener] whenever a toggle actually flips. Listeners that
-     * touch WebView should hop to the main thread themselves.
+     * touch callbacks should hop to the main thread themselves.
      */
     fun addOnChangedListener(listener: (String) -> Unit) {
         synchronized(listeners) { listeners += listener }

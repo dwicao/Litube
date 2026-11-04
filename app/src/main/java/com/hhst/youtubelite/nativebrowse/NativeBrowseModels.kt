@@ -45,6 +45,33 @@ enum class NativeBrowseKind {
     HOME, TRENDING, SEARCH, CHANNEL, PLAYLIST, SUBSCRIPTIONS, LIBRARY
 }
 
+data class NativeComment(
+    val commentId: String,
+    val author: String,
+    val avatarUrl: String? = null,
+    val text: String,
+    val likeCount: Int = -1,
+    val publishedText: String? = null,
+    val pinned: Boolean = false,
+    val authorVerified: Boolean = false,
+)
+
+data class NativeCommentsState(
+    val videoId: String = "",
+    val items: List<NativeComment> = emptyList(),
+    val nextPage: String? = null,
+    val isLoading: Boolean = false,
+    val isAppending: Boolean = false,
+    val error: String? = null,
+    val disabled: Boolean = false,
+)
+
+data class NativeSubscription(
+    val channelId: String,
+    val name: String,
+    val avatarUrl: String? = null,
+)
+
 data class NativeBrowseState(
     val kind: NativeBrowseKind = NativeBrowseKind.HOME,
     val query: String = "",

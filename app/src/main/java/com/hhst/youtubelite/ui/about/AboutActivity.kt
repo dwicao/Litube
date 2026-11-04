@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -96,8 +95,6 @@ class AboutActivity : ComponentActivity() {
                 } },
                 onRelease = { openUrl("$SOURCE/releases/latest") },
                 onClear = { action("clear_cache") {
-                    // clearCache removes HTTP cache only; cookies and WebStorage keep the account.
-                    WebView(this@AboutActivity).let { it.clearCache(true); it.destroy() }
                     withContext(Dispatchers.IO) {
                         get<MemCache>(MemCache::class.java).clear()
                         val kv = get<MMKV>(MMKV::class.java)

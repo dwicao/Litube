@@ -1,103 +1,64 @@
-@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package com.hhst.youtubelite.ui.browser
 
-import android.os.Build
-
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.database.ContentObserver
 import android.media.AudioManager
-import android.os.Handler
-import android.os.Looper
+import android.os.Build
 import android.os.SystemClock
-import android.provider.Settings
-import android.view.OrientationEventListener
 import android.view.SurfaceView
 import android.view.View
-import android.view.ViewGroup
-import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hhst.youtubelite.R
-import com.hhst.youtubelite.browser.Bridge
-import com.hhst.youtubelite.browser.BrowserHost
-import com.hhst.youtubelite.browser.PageKind
-import com.hhst.youtubelite.browser.PlayerHooks
-import com.hhst.youtubelite.browser.Tab
-import com.hhst.youtubelite.browser.WatchPage
-import com.hhst.youtubelite.browser.WebViewFactory
-import com.hhst.youtubelite.browser.TransientUi
-import com.hhst.youtubelite.browser.TransientKind
-import com.hhst.youtubelite.nativebrowse.NativeBrowseScreen
-import androidx.compose.ui.graphics.graphicsLayer
 import com.hhst.youtubelite.core.HapticsController
-import com.hhst.youtubelite.downloader.core.BatchSnapshot
-import com.hhst.youtubelite.downloader.core.SnapshotReject
-import com.hhst.youtubelite.downloader.core.DownloadShareParser
 import com.hhst.youtubelite.downloader.ui.DownloadUi
-import com.hhst.youtubelite.downloader.ui.DownloadUiStart
-import com.hhst.youtubelite.downloader.webview.DownloadWebBridge
-import com.hhst.youtubelite.core.WebViewTimerHandle
-import com.hhst.youtubelite.core.WebViewTimerOccupancy
-import com.hhst.youtubelite.core.WebViewTimerOwner
 import com.hhst.youtubelite.extension.Extension
 import com.hhst.youtubelite.extension.ExtensionManager
 import com.hhst.youtubelite.extension.PreferenceKeys
-import com.hhst.youtubelite.extractor.Extractor
 import com.hhst.youtubelite.extractor.VideoId
-import com.hhst.youtubelite.net.NetTracer
+import com.hhst.youtubelite.nativebrowse.NativeBrowseKind
+import com.hhst.youtubelite.nativebrowse.NativeBrowseScreen
+import com.hhst.youtubelite.nativebrowse.NativeBrowseViewModel
+import com.hhst.youtubelite.nativebrowse.NativeCommentsSheet
+import com.hhst.youtubelite.nativebrowse.NativeShortsScreen
+import com.hhst.youtubelite.nativebrowse.NativeSubscriptionStore
 import com.hhst.youtubelite.player.PlayerViewModel
 import com.hhst.youtubelite.player.QueueItem
-import com.hhst.youtubelite.player.service.NotificationPermission
 import com.hhst.youtubelite.player.surface.MiniPlayerStore
 import com.hhst.youtubelite.player.surface.MiniPlayerWindow
 import com.hhst.youtubelite.player.surface.PlayerCallbackBridge
@@ -109,24 +70,21 @@ import com.hhst.youtubelite.player.surface.PlayerWindowHost
 import com.hhst.youtubelite.ui.about.AboutActivity
 import com.hhst.youtubelite.ui.extension.ExtensionScreen
 import com.hhst.youtubelite.ui.extension.SettingsDataScreen
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
-import org.json.JSONObject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
-/** Multi-tab WebView browser with a short fade + slide on tab switch. */
+private enum class NativeTab { HOME, SHORTS, SEARCH, SUBSCRIPTIONS, LIBRARY }
+
+/** Native browse shell: bottom tabs over NewPipe-backed lists, player overlay on top. */
 @Composable
 fun BrowserScreen(
     viewModel: BrowserViewModel = koinViewModel(),
     playerViewModel: PlayerViewModel = koinInject(),
     extensionManager: ExtensionManager = koinInject(),
-    extractor: Extractor = koinInject(),
     miniPlayerStore: MiniPlayerStore = koinInject(),
-    webViewTimers: WebViewTimerOccupancy = koinInject(),
+    subscriptionStore: NativeSubscriptionStore = koinInject(),
+    browseViewModel: NativeBrowseViewModel = koinViewModel(),
     sharedUrl: StateFlow<String?>? = null,
     pendingPlaylistUrl: StateFlow<String?>? = null,
     inPipFlow: StateFlow<Boolean>? = null,
@@ -134,21 +92,15 @@ fun BrowserScreen(
     onPendingPlaylistConsumed: () -> Unit = {},
     onPlayerActiveChanged: (active: Boolean, playing: Boolean, width: Int, height: Int) -> Unit = { _, _, _, _ -> },
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    val hosts = remember { mutableStateMapOf<Long, BrowserHost>() }
-    var displayedTabId by remember { mutableLongStateOf(uiState.activeId) }
-    val presentationId = if (hosts[uiState.activeId] != null) uiState.activeId else displayedTabId
-    SideEffect { if (hosts[uiState.activeId] != null) displayedTabId = uiState.activeId }
+    var currentTab by remember { mutableStateOf(NativeTab.HOME) }
     var showExtension by remember { mutableStateOf(false) }
     var showSettingsData by remember { mutableStateOf(false) }
-    var showNativeBrowse by remember { mutableStateOf(false) }
-    var mediaMenuItem by remember { mutableStateOf<Bridge.QueueItemJson?>(null) }
-    // PiP flips without a recreate; the activity pushes it through [inPipFlow].
+    var showComments by remember { mutableStateOf(false) }
+    var mediaMenuUrl by remember { mutableStateOf<String?>(null) }
     var inPip by remember { mutableStateOf(inPipFlow?.value == true) }
     LaunchedEffect(inPipFlow) {
         inPipFlow?.collect {
@@ -156,379 +108,64 @@ fun BrowserScreen(
             if (it) {
                 showExtension = false
                 showSettingsData = false
-                mediaMenuItem = null
-                hosts.values.forEach { host ->
-                    host.webView.evaluateJavascript("window.Lite?.ui?.dismiss();", null)
-                }
+                showComments = false
+                mediaMenuUrl = null
             }
         }
     }
     val audioManager = remember {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    val activeId = uiState.activeId
-    val emptyTransientUi = remember { MutableStateFlow(TransientUi()) }
-    val webTransientUi by (hosts[activeId]?.transientUi ?: emptyTransientUi).collectAsState()
-    val forward = uiState.forward
-    val tabs = uiState.tabs
     val onOpenExtension = remember { { showExtension = true } }
     val onOpenDownloads = remember(context) { { DownloadUi.openManager(context) } }
-    val onOpenWith = remember(context) {
-        { url: String ->
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, url)
-            }
-            context.startActivity(Intent.createChooser(send, context.getString(R.string.open_with)))
-        }
-    }
     val onAbout = remember(context) {
         { context.startActivity(Intent(context, AboutActivity::class.java)) }
     }
 
-    // Share / open-with intents: route to a tab; the watch hook starts
-    // playback. Clearing after consumption lets the same URL re-share.
     LaunchedEffect(sharedUrl) {
         sharedUrl?.collect { url ->
             if (url != null) {
-                viewModel.openTab(url)
+                handleSharedUrl(url, browseViewModel, playerViewModel, { currentTab = it })
                 onSharedUrlConsumed()
-            }
-        }
-    }
-    var pendingPlaylist by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(pendingPlaylistUrl) {
-        pendingPlaylistUrl?.collect { url -> pendingPlaylist = url }
-    }
-    LaunchedEffect(uiState.url, uiState.isLoading, pendingPlaylist, hosts[activeId]) {
-        val pending = pendingPlaylist ?: return@LaunchedEffect
-        if (uiState.isLoading) return@LaunchedEffect
-        val current = uiState.url ?: return@LaunchedEffect
-        if (!DownloadShareParser.samePlaylist(current, pending)) return@LaunchedEffect
-        val host = hosts[activeId] ?: return@LaunchedEffect
-        val bridge = host.downloadBridge ?: return@LaunchedEffect
-        repeat(5) {
-            delay(400)
-            val snapshot = CompletableDeferred<BatchSnapshot?>()
-            bridge.collectLoadedSnapshot(host.webView) { snapshot.complete(it) }
-            val loaded = snapshot.await() ?: return@repeat
-            pendingPlaylist = null
-            onPendingPlaylistConsumed()
-            when (val start = DownloadUi.showBatchConfirm(context, loaded)) {
-                is DownloadUiStart.Rejected -> {
-                    val msg = when (start.reason) {
-                        is SnapshotReject.TooManyItems ->
-                            context.getString(R.string.download_snapshot_too_many)
-                        is SnapshotReject.TooLarge ->
-                            context.getString(R.string.download_snapshot_too_large)
-                    }
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                }
-                is DownloadUiStart.Started -> Unit
-            }
-            return@LaunchedEffect
-        }
-    }
-
-    // Host create/destroy in effects so composition stays free of WebView side effects.
-    // The suspended watch tab keeps its host.
-    val liveTabIds = remember(tabs, uiState.suspendedWatchId) {
-        buildSet {
-            tabs.forEach { add(it.id) }
-            uiState.suspendedWatchId?.let { add(it) }
-        }
-    }
-    val queueAdded = stringResource(R.string.queue_item_added)
-    val queueUnavailable = stringResource(R.string.queue_item_unavailable)
-    val onAddToQueue = remember(playerViewModel, context, queueAdded, queueUnavailable) {
-        { item: Bridge.QueueItemJson? ->
-            if (item == null) {
-                Toast.makeText(context, queueUnavailable, Toast.LENGTH_SHORT).show()
-            } else {
-                playerViewModel.onQueueAdd(
-                    QueueItem(
-                        videoId = item.videoId.orEmpty(),
-                        url = item.url.orEmpty(),
-                        title = item.title?.takeIf { it.isNotBlank() } ?: item.videoId.orEmpty(),
-                        author = item.author,
-                        thumbnailUrl = item.thumbnailUrl,
-                    ),
-                )
-                hosts[viewModel.uiState.value.activeId]?.webView
-                    ?.evaluateJavascript("window.Lite?.ui?.dismiss();", null)
-                Toast.makeText(context, queueAdded, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-    val onShowMediaItemMenu = remember {
-        { item: Bridge.QueueItemJson -> mediaMenuItem = item }
-    }
-    // Playlist presence from the page hooks: only a host actually showing the
-    // playing video may speak for it. Without this, a shorts tab opened while
-    // a watch tab is suspended pushes false and kills the mini-player's
-    // playlist auto-advance until the suspended page navigates again.
-    val onPlaylistPresence: (Long, Boolean) -> Unit = remember(playerViewModel, viewModel) {
-        { fromTab, has ->
-            val state = viewModel.uiState.value
-            val playingId = VideoId.parse(playerViewModel.uiState.value.url)
-            val speaksForPlayback = playingId == null ||
-                fromTab == state.suspendedWatchId ||
-                state.tabs.any { it.id == fromTab && VideoId.parse(it.url) == playingId }
-            if (speaksForPlayback) playerViewModel.onPageHasPlaylist(has)
-        }
-    }
-    var microphoneGrant by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
-    val microphoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        microphoneGrant?.invoke(granted)
-        microphoneGrant = null
-    }
-    val onMicrophoneRequest: ((Boolean) -> Unit) -> Unit = remember(context, microphoneLauncher) {
-        { onResult ->
-            val permission = Manifest.permission.RECORD_AUDIO
-            if (context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
-                onResult(true)
-            } else if (microphoneGrant != null) {
-                onResult(false)
-            } else {
-                microphoneGrant = onResult
-                microphoneLauncher.launch(permission)
-            }
-        }
-    }
-    LaunchedEffect(liveTabIds) {
-        createHosts(
-            tabs, hosts, context, viewModel, extensionManager, onOpenExtension,
-            onOpenDownloads, onOpenWith, onAbout, extractor,
-            playerViewModel, onAddToQueue, onShowMediaItemMenu,
-            onPlaylistPresence = onPlaylistPresence,
-            onMicrophoneRequest = onMicrophoneRequest,
-        )
-        delay(TAB_DESTROY_DELAY_MS)
-        hosts.keys.filter { it !in liveTabIds }.forEach { id ->
-            hosts.remove(id)?.let { destroyHost(it) }
-        }
-    }
-
-    LaunchedEffect(viewModel) {
-        viewModel.loadRequests.collect { (tabId, url) ->
-            hosts[tabId]?.webView?.let { webView ->
-                WebViewFactory.prepareBackground(webView, url)
-                webView.loadUrl(url)
             }
         }
     }
 
     val haptics: HapticsController = koinInject()
-    // History is per WebView; re-read after switch (inactive tabs skip nav callbacks).
-    LaunchedEffect(activeId, hosts[activeId]) {
-        val webView = hosts[activeId]?.webView ?: return@LaunchedEffect
-        viewModel.canGoBack = webView.canGoBack()
-        hosts.forEach { (id, host) ->
-            host.webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tabVisibilityChanged',{detail:{active:${id == activeId}}}));", null)
-            if (id == activeId) host.webView.onResume() else host.webView.onPause()
-        }
-    }
-
-    val latestHosts = rememberUpdatedState(hosts)
-    val latestActiveId = rememberUpdatedState(activeId)
-
-    // Preference flips must reach already-rendered pages: the injected
-    // scripts listen for this event to re-read prefs without a reload.
-    val prefBroadcastHandler = remember { Handler(Looper.getMainLooper()) }
-    DisposableEffect(extensionManager) {
-        val listener: (String) -> Unit = { key ->
-            prefBroadcastHandler.post {
-                val quoted = JSONObject.quote(key)
-                val js = "window.dispatchEvent(new CustomEvent('preferencesChanged'," +
-                    "{detail:{key:$quoted}}));"
-                latestHosts.value.values.forEach { host ->
-                    host.webView.evaluateJavascript(js, null)
-                }
-            }
-        }
-        extensionManager.addOnChangedListener(listener)
-        onDispose {
-            extensionManager.removeOnChangedListener(listener)
-            prefBroadcastHandler.removeCallbacksAndMessages(null)
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, webViewTimers) {
-        var timerHandle: WebViewTimerHandle? = null
-        fun acquireTimers() {
-            if (timerHandle != null) return
-            timerHandle = webViewTimers.acquire(WebViewTimerOwner.BROWSER)
-        }
-        fun releaseTimers() {
-            timerHandle?.release()
-            timerHandle = null
-        }
-        val observer = LifecycleEventObserver { _, event ->
-            val active = latestHosts.value[latestActiveId.value]?.webView
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    active?.evaluateJavascript("window.dispatchEvent(new CustomEvent('tabVisibilityChanged',{detail:{active:true}}));", null)
-                    playerViewModel.setVideoVisible(playerViewModel.uiState.value.visible)
-                    active?.onResume()
-                    acquireTimers()
-                }
-                Lifecycle.Event.ON_PAUSE -> {
-                    val pausedInPip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && activity?.isInPictureInPictureMode == true
-                    playerViewModel.setVideoVisible(pausedInPip)
-                    latestHosts.value.values.forEach {
-                        it.webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tabVisibilityChanged',{detail:{active:false}}));", null)
-                        it.webView.onPause()
-                    }
-                    releaseTimers()
-                    // "Visible" not "playing": pausing an already-paused player is harmless.
-                    val playerVisible = playerViewModel.uiState.value.visible
-                    if (playerVisible && !pausedInPip && !playerViewModel.audioOnlyBackground &&
-                        !extensionManager.isEnabled(PreferenceKeys.ENABLE_BACKGROUND_PLAY)
-                    ) {
-                        playerViewModel.pauseForBackground()
-                    }
-                }
-                // Dismissing the PiP window goes pause→stop with no second
-                // pause event; without this audio keeps playing invisible.
-                Lifecycle.Event.ON_STOP -> {
-                    val stoppedInPip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && activity?.isInPictureInPictureMode == true
-                    val playerVisible = playerViewModel.uiState.value.visible
-                    if (playerVisible && !stoppedInPip && !playerViewModel.audioOnlyBackground &&
-                        !extensionManager.isEnabled(PreferenceKeys.ENABLE_BACKGROUND_PLAY)
-                    ) {
-                        playerViewModel.pauseForBackground()
-                    }
-                }
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            acquireTimers()
-        }
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            releaseTimers()
-            hosts.values.forEach { destroyHost(it) }
-            hosts.clear()
-        }
-    }
-
-    val exitHint = stringResource(R.string.back_again_to_exit)
-    var lastFinishAt by remember { mutableLongStateOf(0L) }
 
     val navigateBack: () -> Unit = {
         val ps = playerViewModel.uiState.value
         when (PlayerUi.nextBackStep(ps.locked, ps.fullscreen)) {
             PlayerUi.BackStep.Unlock -> playerViewModel.setLocked(false)
             PlayerUi.BackStep.ExitFullscreen -> playerViewModel.setFullscreen(false)
-            // Mini-player stays up: Back drives the browser underneath it.
             PlayerUi.BackStep.BrowserBack -> {
-                // Resolve the active WebView from the synchronous tab state.
-                // A rapid second Back can run before recomposition posts the
-                // new activeId; the compose-side id would still point at the
-                // just-suspended watch tab, and goBack() would drive its
-                // INVISIBLE WebView — whose page hook then replays the
-                // previous video and pulls the mini-player back to full size
-                // over the wrong tab.
-                val webView = latestHosts.value[viewModel.uiState.value.activeId]?.webView
-                when (viewModel.onBack(webCanGoBack = webView?.canGoBack() == true)) {
-                    BackResult.GoWebBack -> {
-                        webView?.goBack()
-                        viewModel.canGoBack = webView?.canGoBack() == true
-                    }
-                    BackResult.Handled -> Unit
-                    BackResult.Finish -> {
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastFinishAt < 2000L) {
-                            playerViewModel.stopOnExit()
-                            activity?.finish()
-                        } else {
-                            lastFinishAt = now
-                            Toast.makeText(context, exitHint, Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                if (showComments) showComments = false
+                else if (mediaMenuUrl != null) mediaMenuUrl = null
+                else if (showExtension || showSettingsData) {
+                    showExtension = false
+                    showSettingsData = false
+                } else if (playerState.visible && !playerState.mini) {
+                    playerViewModel.onLeaveWatch()
+                } else {
+                    activity?.finish()
                 }
             }
         }
     }
-
-    val handleBack: () -> Unit = {
-        val id = viewModel.uiState.value.activeId
-        val host = latestHosts.value[id]
-        if (host != null && host.transientUi.value.kind != TransientKind.NONE) {
-            // A close attempt owns this Back press even while the page animates.
-            host.webView.evaluateJavascript("window.Lite?.ui?.dismiss() === true;", null)
-        } else navigateBack()
-    }
-
-    // Always consume Back. Same path as the player overlay back button.
+    val handleBack: () -> Unit = navigateBack
     BackHandler(enabled = !showExtension && !showSettingsData) { handleBack() }
 
-    val pageBack = rememberUpdatedState(handleBack)
-    DisposableEffect(viewModel) {
-        viewModel.onPageBack = { pageBack.value() }
-        onDispose { viewModel.onPageBack = null }
-    }
-
-    // Mini-player close drops the suspended watch tab; restore revives it.
     DisposableEffect(playerViewModel, viewModel) {
-        playerViewModel.onRestoreWatch = { viewModel.restoreWatchTab(it) }
-        playerViewModel.onWatchClosed = { viewModel.closeWatchTab() }
-        onDispose {
-            playerViewModel.onRestoreWatch = null
-            playerViewModel.onWatchClosed = null
-        }
-    }
-    // Watch-page operations for queue/playlist navigation. The watch host is
-    // the suspended watch tab when the mini-player owns the surface — the
-    // ACTIVE tab may be a completely different page by then, and evaluating
-    // there would silently no-op the playlist navigation.
-    DisposableEffect(playerViewModel, viewModel, hosts) {
-        fun watchWebView(): WebView? {
-            val state = viewModel.uiState.value
-            val watchId = state.suspendedWatchId ?: state.activeId
-            return hosts[watchId]?.webView
-        }
-        playerViewModel.watchPage = object : WatchPage {
-            override fun origin() = watchWebView()?.let { view ->
-                hosts.values.firstOrNull { it.webView === view }?.documentOrigin?.invoke()
-            }
-
-            override fun evaluate(js: String, onResult: (String?) -> Unit) {
-                val webView = watchWebView() ?: return onResult(null)
-                val document = origin()
-                webView.evaluateJavascript(js) { result ->
-                    onResult(result.takeIf { watchWebView() === webView && origin() == document })
-                }
-            }
-
-            override fun canGoBack(): Boolean = watchWebView()?.canGoBack() == true
-
-            override fun goBack() {
-                val webView = watchWebView() ?: return
-                webView.goBack()
-                // canGoBack is keyed by the ACTIVE tab; the watch host may be
-                // a suspended tab, so its history must not be written there.
-            }
-        }
-        onDispose {
-            playerViewModel.watchPage = null
-        }
-    }
-    // Only a showing player can suspend the watch tab.
-    val suspendSource = rememberUpdatedState(playerState.visible)
-    DisposableEffect(viewModel) {
-        viewModel.isPlayerShowing = { suspendSource.value }
-        onDispose { viewModel.isPlayerShowing = { false } }
-    }
-    DisposableEffect(viewModel, playerViewModel) {
+        playerViewModel.onRestoreWatch = { playerViewModel.onReturnToWatch(it) }
+        playerViewModel.onWatchClosed = { }
         viewModel.onWatchSuspended = { playerViewModel.enterMiniPlayer() }
         viewModel.onWatchOpened = { playerViewModel.onReturnToWatch(it) }
         viewModel.onShortsClosed = { playerViewModel.onShortsClosed() }
         viewModel.onShortsOpened = { playerViewModel.onShortsOpened() }
         viewModel.onTabSwitched = { haptics.perform(HapticsController.Event.TAB) }
         onDispose {
+            playerViewModel.onRestoreWatch = null
+            playerViewModel.onWatchClosed = null
             viewModel.onWatchSuspended = null
             viewModel.onWatchOpened = null
             viewModel.onShortsClosed = null
@@ -537,41 +174,15 @@ fun BrowserScreen(
         }
     }
     LaunchedEffect(playerState.visible) { playerViewModel.setVideoVisible(playerState.visible) }
-    // Redirects can enter Shorts without going through the tab router.
-    LaunchedEffect(
-        uiState.activeId,
-        uiState.url,
-        uiState.suspendedWatchId,
-        playerState.visible,
-        playerState.mini,
-    ) {
-        // A restored audio session can open its watch tab before the first
-        // home-page effect runs. Ignore that old snapshot instead of shrinking
-        // the restored video into the mini-player.
-        val currentBrowser = viewModel.uiState.value
-        if (uiState.activeId != currentBrowser.activeId || uiState.url != currentBrowser.url) return@LaunchedEffect
-        if (PageKind.isShorts(uiState.url)) {
-            playerViewModel.onShortsOpened()
-            return@LaunchedEffect
-        }
-        if (uiState.suspendedWatchId != null) return@LaunchedEffect
-        if (VideoId.parse(uiState.url) != null) return@LaunchedEffect
-        if (playerState.visible &&
-            !playerState.mini &&
-            extensionManager.isEnabled(PreferenceKeys.ENABLE_IN_APP_MINI_PLAYER)
-        ) {
-            playerViewModel.enterMiniPlayer()
-        } else {
-            playerViewModel.onLeaveWatch()
-        }
+    LaunchedEffect(activity) {
+        playerViewModel.initializeCast()
     }
 
-    val back = rememberUpdatedState(handleBack)
     val windowHost = remember(activity, audioManager, playerViewModel) {
         PlayerWindowHost(
             activity = activity,
             audioManager = audioManager,
-            back = { back.value() },
+            back = { handleBack() },
             pipAvailable = { playerViewModel.uiState.value.pipAvailable },
             sharePayload = {
                 val snapshot = playerViewModel.uiState.value
@@ -609,56 +220,6 @@ fun BrowserScreen(
         )
         if (!playerState.visible) windowHost.restoreBrightness()
     }
-    LaunchedEffect(playerState.visible, activity) {
-        if (playerState.visible &&
-            extensionManager.isEnabled(PreferenceKeys.ENABLE_BACKGROUND_PLAY)
-        ) {
-            activity?.let { NotificationPermission.requestIfNeeded(it) }
-        }
-    }
-    LaunchedEffect(activity) {
-        playerViewModel.initializeCast()
-    }
-    val pipState = rememberUpdatedState(inPip)
-    DisposableEffect(activity, playerViewModel, lifecycleOwner) {
-        val act = activity ?: return@DisposableEffect onDispose {}
-        val resolver = act.contentResolver
-        fun readAutoRotate() =
-            Settings.System.getInt(resolver, Settings.System.ACCELEROMETER_ROTATION, 1) == 1
-        // Cached via observer: onOrientationChanged fires at sensor rate and a
-        // per-event Settings query is a binder IPC each time.
-        var autoRotate = readAutoRotate()
-        val rotateObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                autoRotate = readAutoRotate()
-            }
-        }
-        resolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION),
-            true,
-            rotateObserver,
-        )
-        val listener = object : OrientationEventListener(act) {
-            override fun onOrientationChanged(degrees: Int) {
-                playerViewModel.onPhysicalOrientation(degrees, autoRotate, pipState.value)
-            }
-        }
-        // The sensor keeps firing in the background; only listen while visible.
-        val lifecycleObserver = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> if (listener.canDetectOrientation()) listener.enable()
-                Lifecycle.Event.ON_STOP -> listener.disable()
-                else -> Unit
-            }
-        }
-        if (listener.canDetectOrientation()) listener.enable()
-        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
-            resolver.unregisterContentObserver(rotateObserver)
-            listener.disable()
-        }
-    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -675,92 +236,114 @@ fun BrowserScreen(
         val availableHeightDp = (maxHeight.value.toInt() - topInsetDp - bottomInsetDp).coerceAtLeast(1)
         val pageBounds = PlayerUi.embeddedBounds(playerState, availableWidthDp)
         val layoutMini = playerState.visible && !playerState.mini &&
-            !playerState.fullscreen && !inPip && !PageKind.isShorts(playerState.url) &&
+            !playerState.fullscreen && !inPip &&
             PlayerUi.useLandscapeMiniPlayer(availableWidthDp, availableHeightDp, pageBounds.height)
         SideEffect { playerViewModel.setCompactPlayer(layoutMini) }
         val layoutMiniState = rememberUpdatedState(layoutMini)
         val surfaceCallbacks = remember(playerCallbacks, playerViewModel) {
             object : PlayerSurfaceCallbacks by playerCallbacks {
                 override fun onMiniRestore() {
-                    // The embedded slot cannot fit here; expand into fullscreen.
                     if (layoutMiniState.value) playerViewModel.onFullscreenToggle()
                     else playerCallbacks.onMiniRestore()
                 }
             }
         }
-        Box(
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing),
-        ) {
-            AnimatedContent(
-                targetState = presentationId,
-                transitionSpec = {
-                    val offset = { width: Int -> width / 14 }
-                    // Video surfaces do not participate in an alpha transition.
-                    val shortsTransition = PageKind.isShorts(uiState.url) ||
-                        PageKind.isShorts(hosts[initialState]?.webView?.url) ||
-                        PageKind.isShorts(hosts[targetState]?.webView?.url)
-                    if (shortsTransition) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else if (forward) {
-                        (
-                            fadeIn(animationSpec = tween(TAB_FADE_MS)) +
-                                slideInHorizontally(tween(TAB_SLIDE_MS), offset)
-                            ) togetherWith (
-                            fadeOut(animationSpec = tween(TAB_FADE_MS)) +
-                                slideOutHorizontally(tween(TAB_SLIDE_MS)) { -offset(it) }
-                            )
-                    } else {
-                        (
-                            fadeIn(animationSpec = tween(TAB_FADE_MS)) +
-                                slideInHorizontally(tween(TAB_SLIDE_MS)) { -offset(it) }
-                            ) togetherWith (
-                            fadeOut(animationSpec = tween(TAB_FADE_MS)) +
-                                slideOutHorizontally(tween(TAB_SLIDE_MS), offset)
-                            )
+            bottomBar = {
+                if (!inPip && !playerState.fullscreen) {
+                    NavigationBar {
+                        NavigationBarItem(
+                            selected = currentTab == NativeTab.HOME,
+                            onClick = {
+                                currentTab = NativeTab.HOME
+                                browseViewModel.openHome()
+                                haptics.perform(HapticsController.Event.TAB)
+                            },
+                            icon = { Icon(painterResource(R.drawable.ic_play), null) },
+                            label = { Text(stringResource(R.string.app_name)) },
+                        )
+                        NavigationBarItem(
+                            selected = currentTab == NativeTab.SHORTS,
+                            onClick = {
+                                currentTab = NativeTab.SHORTS
+                                playerViewModel.onShortsOpened()
+                                haptics.perform(HapticsController.Event.TAB)
+                            },
+                            icon = { Icon(painterResource(R.drawable.ic_replay), null) },
+                            label = { Text("Shorts") },
+                        )
+                        NavigationBarItem(
+                            selected = currentTab == NativeTab.SEARCH,
+                            onClick = {
+                                currentTab = NativeTab.SEARCH
+                                haptics.perform(HapticsController.Event.TAB)
+                            },
+                            icon = { Icon(painterResource(R.drawable.ic_more), null) },
+                            label = { Text("Search") },
+                        )
+                        NavigationBarItem(
+                            selected = currentTab == NativeTab.SUBSCRIPTIONS,
+                            onClick = {
+                                currentTab = NativeTab.SUBSCRIPTIONS
+                                haptics.perform(HapticsController.Event.TAB)
+                            },
+                            icon = { Icon(painterResource(R.drawable.ic_queue), null) },
+                            label = { Text("Subs") },
+                        )
+                        NavigationBarItem(
+                            selected = currentTab == NativeTab.LIBRARY,
+                            onClick = {
+                                currentTab = NativeTab.LIBRARY
+                                haptics.perform(HapticsController.Event.TAB)
+                            },
+                            icon = { Icon(painterResource(R.drawable.ic_settings), null) },
+                            label = { Text("You") },
+                        )
                     }
-                },
-                label = "tabSwitch",
-                modifier = Modifier.fillMaxSize(),
-            ) { tabId ->
-                val host = hosts[tabId]
-                if (host != null) {
-                    AndroidView(
-                        factory = {
-                            (host.container.parent as? ViewGroup)?.removeView(host.container)
-                            host.container
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        update = { container ->
-                            container.isRefreshing =
-                                tabId == uiState.activeId && uiState.isRefreshing
-                        },
+                }
+            },
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                when (currentTab) {
+                    NativeTab.HOME -> NativeBrowseScreen(
+                        viewModel = browseViewModel,
+                        onPlayVideo = { url -> playerViewModel.playNativeVideo(url) },
                     )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize())
+                    NativeTab.SHORTS -> NativeShortsScreen(
+                        viewModel = browseViewModel,
+                        onPlayVideo = { url -> playerViewModel.playNativeVideo(url) },
+                    )
+                    NativeTab.SEARCH -> NativeBrowseScreen(
+                        viewModel = browseViewModel,
+                        onPlayVideo = { url -> playerViewModel.playNativeVideo(url) },
+                    )
+                    NativeTab.SUBSCRIPTIONS -> NativeSubscriptionsScreen(
+                        onPlayVideo = { url -> playerViewModel.playNativeVideo(url) },
+                    )
+                    NativeTab.LIBRARY -> NativeLibraryScreen(
+                        onOpenExtension = onOpenExtension,
+                        onOpenDownloads = onOpenDownloads,
+                        onAbout = onAbout,
+                    )
                 }
             }
-
-            LoadingBar(
-                progress = uiState.progress,
-                visible = uiState.isLoading,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
         }
 
-        // Native player overlays the page player. Mini-player docks bottom-end.
         if (playerState.visible) {
             val navigationBottomDp = with(density) {
                 WindowInsets.navigationBars.getBottom(this).toDp().value.toInt()
             }
             val isMini = (playerState.mini || layoutMini) && !inPip && !playerState.fullscreen
-            var modalOverlapsPlayer by remember(activeId) { mutableStateOf(false) }
-            val hideForWebModal = !inPip && webTransientUi.kind != TransientKind.NONE && modalOverlapsPlayer
-            // Keep one surface across embedded and mini modes.
             val playerSurface: @Composable (Modifier) -> Unit = { surfaceModifier ->
                 var modalSurface by remember { mutableStateOf<SurfaceView?>(null) }
-                SideEffect { modalSurface?.visibility = if (hideForWebModal) View.INVISIBLE else View.VISIBLE }
+                SideEffect { modalSurface?.visibility = View.VISIBLE }
                 Box(surfaceModifier) {
                     PlayerSurface(
                         state = if (layoutMini) playerState.copy(mini = true, locked = false) else playerState,
@@ -778,50 +361,31 @@ fun BrowserScreen(
                         modifier = Modifier.fillMaxSize(),
                         managedByHost = true,
                     )
-                    val modalHost = hosts[activeId]
-                    if (!inPip && modalHost != null && webTransientUi.kind != TransientKind.NONE) {
-                        TouchShield(modalHost.webView, webTransientUi, modalHost.documentOrigin,
-                            onOverlapChanged = { modalOverlapsPlayer = it }) {
-                            modalHost.webView.evaluateJavascript("window.Lite?.ui?.dismiss();", null)
-                        }
-                    }
                 }
             }
             MiniPlayerWindow(
-                    screenWidthDp = availableWidthDp,
-                    bottomInsetDp = navigationBottomDp,
-                    store = miniPlayerStore,
-                    showStroke = playerState.controlsVisible,
-                    onBackgroundTap = playerViewModel::onToggleControls,
-                    onDismiss = playerViewModel::onMiniClose,
-                    mini = isMini,
-                    fillsWindow = inPip || playerState.fullscreen,
-                    fullscreenSwipeEnabled = !inPip && webTransientUi.kind == TransientKind.NONE,
-                    embeddedTopDp = PlayerUi.playerTopOffsetDp(false, pageBounds.top, topInsetDp),
-                    embeddedHeightDp = pageBounds.height,
-                    embeddedLeftDp = pageBounds.left,
-                    embeddedWidthDp = pageBounds.width,
-                    topInsetDp = topInsetDp,
-                    modifier = (if (inPip || playerState.fullscreen) Modifier else Modifier.padding(start = leftInsetDp.dp, end = rightInsetDp.dp))
-                        .graphicsLayer { alpha = if (hideForWebModal) 0f else 1f },
-                ) {
-                    playerSurface(Modifier.fillMaxSize())
-                }
-        }
-
-        if (showNativeBrowse && !inPip) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing),
+                screenWidthDp = availableWidthDp,
+                bottomInsetDp = navigationBottomDp,
+                store = miniPlayerStore,
+                showStroke = playerState.controlsVisible,
+                onBackgroundTap = playerViewModel::onToggleControls,
+                onDismiss = {
+                    playerViewModel.onMiniClose()
+                    playerViewModel.onShortsClosed()
+                    if (currentTab == NativeTab.SHORTS) currentTab = NativeTab.HOME
+                },
+                mini = isMini,
+                fillsWindow = inPip || playerState.fullscreen,
+                fullscreenSwipeEnabled = true,
+                embeddedTopDp = PlayerUi.playerTopOffsetDp(false, pageBounds.top, topInsetDp),
+                embeddedHeightDp = pageBounds.height,
+                embeddedLeftDp = pageBounds.left,
+                embeddedWidthDp = pageBounds.width,
+                topInsetDp = topInsetDp,
+                modifier = (if (inPip || playerState.fullscreen) Modifier else Modifier.padding(start = leftInsetDp.dp, end = rightInsetDp.dp))
+                    .graphicsLayer { alpha = 1f },
             ) {
-                androidx.activity.compose.BackHandler { showNativeBrowse = false }
-                NativeBrowseScreen(
-                    onPlayVideo = { url ->
-                        showNativeBrowse = false
-                        viewModel.openTab(url)
-                    },
-                )
+                playerSurface(Modifier.fillMaxSize())
             }
         }
 
@@ -844,9 +408,23 @@ fun BrowserScreen(
                         }
                         if (id == Extension.NAV_NATIVE_BROWSE) {
                             showExtension = false
-                            showNativeBrowse = true
+                            currentTab = NativeTab.HOME
                         }
                     },
+                )
+            }
+        }
+
+        if (showComments && !inPip) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                androidx.activity.compose.BackHandler { showComments = false }
+                NativeCommentsSheet(
+                    viewModel = browseViewModel,
+                    onClose = { showComments = false },
                 )
             }
         }
@@ -861,85 +439,58 @@ fun BrowserScreen(
                     onClose = { showSettingsData = false },
                     onReloadPages = {
                         showSettingsData = false
-                        hosts.values.forEach { it.webView.reload() }
+                        browseViewModel.openHome()
                     },
                 )
             }
         }
 
-        mediaMenuItem?.let { item ->
-            MediaItemMenuDialog(
-                item = item,
-                onQueue = {
-                    onAddToQueue(item)
-                    mediaMenuItem = null
-                },
-                onDismiss = { mediaMenuItem = null },
-            )
+        mediaMenuUrl?.let { url ->
+            val videoId = VideoId.parse(url)
+            if (videoId != null) {
+                MediaItemMenuDialog(
+                    item = com.hhst.youtubelite.browser.Bridge.QueueItemJson(
+                        videoId = videoId,
+                        url = url,
+                        title = videoId,
+                    ),
+                    onQueue = {
+                        playerViewModel.onQueueAdd(
+                            QueueItem(
+                                videoId = videoId,
+                                url = url,
+                                title = videoId,
+                            ),
+                        )
+                        mediaMenuUrl = null
+                        Toast.makeText(context, context.getString(R.string.queue_item_added), Toast.LENGTH_SHORT).show()
+                    },
+                    onDismiss = { mediaMenuUrl = null },
+                )
+            } else {
+                mediaMenuUrl = null
+            }
         }
     }
 }
 
-private fun createHosts(
-    tabs: List<Tab>,
-    hosts: SnapshotStateMap<Long, BrowserHost>,
-    context: Context,
-    viewModel: BrowserViewModel,
-    extensionManager: ExtensionManager,
-    onOpenExtension: () -> Unit,
-    onOpenDownloads: () -> Unit,
-    onOpenWith: (String) -> Unit,
-    onAbout: () -> Unit,
-    extractor: Extractor,
-    playerHooks: PlayerHooks,
-    onAddToQueue: ((Bridge.QueueItemJson?) -> Unit)? = null,
-    onShowMediaItemMenu: ((Bridge.QueueItemJson) -> Unit)? = null,
-    onPlaylistPresence: ((Long, Boolean) -> Unit)? = null,
-    onMicrophoneRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
+private fun handleSharedUrl(
+    url: String,
+    browseViewModel: NativeBrowseViewModel,
+    playerViewModel: PlayerViewModel,
+    setTab: (NativeTab) -> Unit,
 ) {
-    for (tab in tabs) {
-        if (tab.id in hosts) continue
-        val tabId = tab.id
-        hosts[tabId] = WebViewFactory.create(
-            context = context,
-            callbacks = viewModel.callbacksFor(tabId),
-            extensionManager = extensionManager,
-            onOpenExtension = onOpenExtension,
-            onOpenDownloads = onOpenDownloads,
-            onOpenWith = onOpenWith,
-            onAbout = onAbout,
-            onRefresh = { webView ->
-                viewModel.onRefreshStarted(tabId)
-                webView.reload()
-            },
-            extractor = extractor,
-            playerHooks = playerHooks,
-            tabId = tabId,
-            onAddToQueue = onAddToQueue,
-            onShowMediaItemMenu = onShowMediaItemMenu,
-            onPlaylistPresence = onPlaylistPresence?.let { callback ->
-                { has: Boolean -> callback(tabId, has) }
-            },
-            onMicrophoneRequest = onMicrophoneRequest,
-        ).also {
-            WebViewFactory.prepareBackground(it.webView, tab.url)
-            it.webView.loadUrl(tab.url)
-        }
+    val videoId = VideoId.parse(url)
+    if (videoId != null) {
+        playerViewModel.playNativeVideo(url)
+        return
     }
-}
-
-private fun destroyHost(host: BrowserHost) {
-    host.container.isRefreshing = false
-    val webView: WebView = host.webView
-    host.downloadBridge?.detach(webView)
-    webView.stopLoading()
-    webView.removeJavascriptInterface(Bridge.NAME)
-    webView.removeJavascriptInterface(NetTracer.JS_NAME)
-    webView.removeJavascriptInterface(DownloadWebBridge.FALLBACK_NAME)
-    webView.loadUrl("about:blank")
-    (webView.parent as? ViewGroup)?.removeView(webView)
-    (host.container.parent as? ViewGroup)?.removeView(host.container)
-    webView.destroy()
+    if (browseViewModel.openUrl(url)) {
+        setTab(NativeTab.SEARCH)
+    } else {
+        browseViewModel.search(url)
+        setTab(NativeTab.SEARCH)
+    }
 }
 
 private fun Context.findActivity(): Activity? {
@@ -951,6 +502,5 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-private const val TAB_FADE_MS = 180
-private const val TAB_SLIDE_MS = 220
-private val TAB_DESTROY_DELAY_MS = maxOf(TAB_FADE_MS, TAB_SLIDE_MS) + 40L
+private val ExitHintIntervalMs = 2000L
+private var lastExitHintAt = 0L

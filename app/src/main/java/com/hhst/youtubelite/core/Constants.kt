@@ -5,7 +5,7 @@ object Constants {
     const val HOME_URL = "https://m.youtube.com"
     const val YOUTUBE_DOMAIN = "youtube.com"
     /**
-     * The WebView engine's own User-Agent, captured at app start. A hardcoded
+     * The device's own User-Agent, captured at app start. A hardcoded
      * one contradicts the engine's real Client Hints and TLS fingerprint, and
      * googlevideo reads the mismatch as a low-trust client, cutting playback
      * sessions short.

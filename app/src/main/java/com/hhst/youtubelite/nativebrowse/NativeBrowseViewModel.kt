@@ -9,6 +9,7 @@ class NativeBrowseViewModel(
 ) : ViewModel() {
     private val repo = repository ?: NativeBrowseRepository()
     val state: StateFlow<NativeBrowseState> = repo.state
+    val commentsState: StateFlow<NativeCommentsState> = repo.commentsState
 
     init {
         repo.load(NativeBrowseKind.TRENDING)
@@ -50,4 +51,9 @@ class NativeBrowseViewModel(
     fun loadMore() = repo.loadMore()
     fun retry() = repo.retry()
     fun updateSearchInput(text: String) = repo.updateSearchInput(text)
+
+    fun openHome() = repo.load(NativeBrowseKind.HOME)
+    fun loadComments(videoId: String) = repo.loadComments(videoId)
+    fun loadMoreComments() = repo.loadMoreComments()
+    fun clearComments() = repo.clearComments()
 }

@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.browser
 
 import com.hhst.youtubelite.core.Constants
+import com.hhst.youtubelite.nativebrowse.NativePageKind as PageKind
 
 data class Tab(
     val id: Long,
@@ -27,7 +28,7 @@ data class TabState(
  *   new last entry; when only one tab remains it is home and [canPop] is false.
  * - Leaving the active watch tab can **suspend** it: the tab
  *   leaves the stack so Back lands on the previous page, but it is remembered so
- *   the mini-player can restore it (and its WebView) without a reload.
+ *   the mini-player can restore it without a reload.
  */
 class TabController(
     homeUrl: String = Constants.HOME_URL,
@@ -36,7 +37,6 @@ class TabController(
     private val tabs = mutableListOf<Tab>()
     private var activeId: Long
     private var suspendedWatch: Tab? = null
-    private var inheritedShortsId: Long? = null
 
     init {
         val home = Tab(id = nextId++, kind = Constants.PAGE_HOME, url = homeUrl)
@@ -88,24 +88,6 @@ class TabController(
         return if (kind in PageKind.NAV) openNav(url, kind) else openStack(url, kind)
     }
 
-    /** Reuse a source document after a separate Shorts host fails audio startup. */
-    fun inheritShorts(source: Tab, url: String): TabState {
-        tabs.removeAll { it.kind == Constants.PAGE_SHORTS && it.id != source.id }
-        inheritedShortsId = source.id
-        replace(source.id, source.copy(url = url))
-        moveToEnd(source.id)
-        activeId = source.id
-        return state()
-    }
-
-    fun restoreShortsSource(source: Tab): TabState {
-        inheritedShortsId = null
-        replace(source.id, source)
-        activeId = source.id
-        moveToEnd(source.id)
-        return state()
-    }
-
     fun updateUrl(tabId: Long, url: String) {
         suspendedWatch?.takeIf { it.id == tabId }?.let {
             suspendedWatch = it.copy(url = url)
@@ -113,19 +95,9 @@ class TabController(
         }
         val tab = tabs.find { it.id == tabId } ?: return
         if (tab.url == url) return
-        // Re-derive kind so unintercepted cross-kind navigation (POST submit,
-        // redirect chain) cannot leave routing identity stuck on the old kind.
-        // Home is the exception: its kind is its identity (homeTab()/openNav
-        // keep it alive), so it stays home wherever its WebView wanders.
-        val kind = if (tab.kind == Constants.PAGE_HOME || tab.id == inheritedShortsId || UrlPolicy.isLoginUrl(url)) tab.kind else PageKind.of(url)
-        // A redirect can re-derive a kind another tab already owns; two
-        // same-kind tabs break routing (openNav/openTab pick the first). Keep
-        // this tab's identity sticky in that case — it sheds the stray URL on
-        // the next routing pass. The suspended watch tab counts as owning
-        // kind=watch: re-deriving a live watch tab while the mini-player
-        // holds one would leave a dangling suspendedWatch — its host stays
-        // alive forever and restoreSuspendedWatch would re-insert a second
-        // watch tab.
+        val kind = if (tab.kind == Constants.PAGE_HOME) tab.kind else PageKind.of(url)
+        // A redirect can re-derive a kind another tab already owns; keep this
+        // tab's identity sticky in that case.
         val duplicated = kind != tab.kind &&
             (tabs.any { it.id != tabId && it.kind == kind } ||
                 (kind == Constants.PAGE_WATCH && suspendedWatch != null))
@@ -161,8 +133,7 @@ class TabController(
     }
 
     /**
-     * Re-inserts the suspended watch tab on top as-is — no reload. The host
-     * WebView survived the suspension, so the page picks up where it left off.
+     * Re-inserts the suspended watch tab on top as-is — no reload.
      */
     fun restoreSuspendedWatch(): TabState? {
         val watch = suspendedWatch ?: return null

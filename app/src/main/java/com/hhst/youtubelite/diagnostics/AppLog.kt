@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
-import androidx.webkit.WebViewCompat
 import com.google.gson.Gson
 import com.hhst.youtubelite.BuildConfig
 import java.io.File
@@ -143,7 +142,7 @@ object AppLog {
             "build_id" to BuildConfig.DIAGNOSTIC_BUILD_ID, "build_type" to BuildConfig.BUILD_TYPE,
             "android_sdk" to Build.VERSION.SDK_INT, "android_release" to Build.VERSION.RELEASE,
             "manufacturer" to Build.MANUFACTURER, "model" to Build.MODEL,
-            "webview" to (WebViewCompat.getCurrentWebViewPackage(context)?.versionName ?: "unknown"),
+            "engine" to "native",
             "dependencies" to BuildConfig.DIAGNOSTIC_DEPENDENCIES, "available_storage_bytes" to context.filesDir.usableSpace,
             "snapshots" to recorder?.currentSnapshots().orEmpty().map { mapOf("category" to it.category, "context" to it.context, "fields" to it.fields) },
             "providers" to providers.mapValues { runCatching { DiagnosticRedaction.fields(it.value.snapshot()) }.getOrDefault(mapOf("state" to "unknown")) })

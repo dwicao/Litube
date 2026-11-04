@@ -8,7 +8,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeoutException
 import com.google.common.util.concurrent.SettableFuture
 import java.net.URI
-import android.webkit.WebView
 import org.schabi.newpipe.extractor.services.youtube.streams.YoutubeSession
 import org.schabi.newpipe.extractor.services.youtube.streams.ClientProfile
 import org.schabi.newpipe.extractor.services.youtube.streams.StreamHttpException
@@ -31,7 +30,6 @@ class YoutubeExtractionHost(
     private val tokens: PoTokenProvider,
     val diagnostics: ExtractionDiagnostics,
     val plans: YoutubeMediaRequests,
-    private val browserResponses: BrowserPlayerResponses,
 ) {
     private val watchdog = Executors.newSingleThreadScheduledExecutor { Thread(it, "youtube-cancellation").apply { isDaemon = true } }
     private data class CachedStream(val stream: Stream, val expires: Long, val bytes: Int)
@@ -68,7 +66,6 @@ class YoutubeExtractionHost(
     }
     fun scopeHint(): String = sessions.captureStamp()
     fun recoveryScope(): String = sessions.recoveryScope()
-    fun installBrowserCapture(view: WebView, generation: () -> Long) = browserResponses.install(view, generation)
     fun invalidateStream(videoId: String) = synchronized(streams) {
         streams.keys.removeAll { it.contains(":" + videoId + ":") }
         Unit
@@ -173,10 +170,6 @@ class YoutubeExtractionHost(
         override fun execute(request: Request): Response {
             val context = contextOf()
             context.check()
-            (if (fresh) null else browserResponses.get(request, context))?.let {
-                diagnostics.forContext(context).event("player", "WEB", "browser-response-cache", 0, 200)
-                return Response(200, "OK", emptyMap(), it, request.url())
-            }
             val builder = okhttp3.Request.Builder().url(request.url()).tag(DiagnosticContext::class.java, diagnostics.contextOf(context))
             request.headers().forEach { (name, values) -> values.forEach { builder.addHeader(name, it) } }
             builder.method(request.httpMethod(), request.dataToSend()?.toRequestBody())

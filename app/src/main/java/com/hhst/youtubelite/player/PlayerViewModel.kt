@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hhst.youtubelite.R
-import com.hhst.youtubelite.browser.PageKind
+import com.hhst.youtubelite.nativebrowse.NativePageKind as PageKind
 import com.hhst.youtubelite.browser.PageOrigin
 import com.hhst.youtubelite.browser.PlayerHooks
 import com.hhst.youtubelite.browser.WatchPage
@@ -148,11 +148,9 @@ data class PlayerUiState(
  * runs and nothing here is torn down on activity death.
  *
  * Composition wiring contract: BrowserScreen attaches/detaches
- * [onRestoreWatch], [onWatchClosed] and [watchPage] in DisposableEffects.
+ * [onRestoreWatch] and [onWatchClosed] in DisposableEffects.
  * All of them may be null whenever the browser is not composed (activity
- * destroyed with background play still running); page-playlist navigation
- * and the WebView-back "previous" fallback then degrade to queue-only until
- * the browser re-attaches.
+ * destroyed with background play still running).
  */
 class PlayerViewModel(
     private val engine: PlaybackApi,
@@ -174,13 +172,11 @@ class PlayerViewModel(
     fun setCompactPlayer(compact: Boolean) {
         if (compactPlayer == compact) return
         compactPlayer = compact
-        watchPage?.evaluate("window.__syncPlayerCompact && window.__syncPlayerCompact();") { }
     }
 
     override fun isPlayerCompact(origin: PageOrigin): Boolean {
         val state = _uiState.value
-        return compactPlayer && state.visible && !state.fullscreen && !state.mini &&
-            acceptsPageCallback(playbackOrigin, origin)
+        return compactPlayer && state.visible && !state.fullscreen && !state.mini
     }
 
     // Position lives outside [PlayerUiState]: the ~4 Hz snapshot tick must
@@ -244,14 +240,10 @@ class PlayerViewModel(
     /** Live-scrub anchor: position captured on the first preview of a scrub. */
     private var scrubAnchorMs: Long? = null
 
-    /** WebView document that started the current media; filters stale callbacks. */
-    private var playbackOrigin: PageOrigin? = null
-
     /** Supersedes in-flight cast-handoff waiters when a newer play/close wins. */
     private var playbackRequestSeq = 0
     private var handledEndSeq: Int? = null
     private val autoplayRequestId = AtomicLong()
-    @Volatile private var autoplayOrigin: PageOrigin? = null
 
     /** Last notification nav push; snapshots tick 4x/s, refresh is not free. */
     private var lastNavNext: Boolean? = null
@@ -268,14 +260,11 @@ class PlayerViewModel(
     /** Browser navigates back to the watch URL when restoring the mini-player. */
     var onRestoreWatch: ((String) -> Unit)? = null
 
-    /** Mini-player closed; the browser drops the suspended watch tab. */
+    /** Mini-player closed; the browser drops its suspended state. */
     var onWatchClosed: (() -> Unit)? = null
 
-    /** Watch-page operations (JS eval + back stack) provided by the browser. */
+    /** Watch-page operations unused in native mode; kept for interface compat. */
     var watchPage: WatchPage? = null
-
-    /** Last "playlist present" answer from the page (Bridge push). */
-    @Volatile private var pageHasPlaylist = false
 
     /** Installed once in the init block; the process-scoped router is never re-pointed. */
     private val commandHandler = object : PlaybackCommandRouter.Handler {
@@ -466,29 +455,32 @@ class PlayerViewModel(
         }
     }
 
-    // -- PlayerHooks (from JS bridge) --
+    // -- Playback entry points --
 
-    /** A web feed suspends local playback until the user resumes the preserved watch item. */
+    /** Play a video URL directly from native browse UI. */
+    fun playNativeVideo(url: String) {
+        playVideo(url, PageOrigin.HOST)
+    }
+
+    /** Prepare a video without starting playback (selection prefetch). */
+    fun prepareNativeVideo(url: String) {
+        prepareVideo(url)
+    }
+
+    // -- PlayerHooks (native; origin always HOST) --
+
+    /** A shorts feed suspends local playback until the user resumes the preserved watch item. */
     private var shortsPausedId: String? = null
     @Volatile private var inShorts = false
 
     override fun playVideo(url: String, origin: PageOrigin) {
-        if (inShorts || PageKind.isShorts(url)) return
         if (VideoId.parse(url) == shortsPausedId) { onReturnToWatch(url); return }
         shortsPausedId = null
-        val current = engine.snapshot.value
-        val documentReloaded = !origin.isHost && origin.tabId == playbackOrigin?.tabId &&
-            origin.documentGeneration != playbackOrigin?.documentGeneration
-        if (documentReloaded && current.prepared && current.videoId == VideoId.parse(url)) {
-            playbackOrigin = origin
-            return
-        }
-        if (!origin.isHost) playbackOrigin = origin
         startPlayback(url, keepMini = _uiState.value.mini)
     }
 
     override fun prepareVideo(url: String) {
-        if (!inShorts && !PageKind.isShorts(url)) engine.preparePlayback(url)
+        engine.preparePlayback(url)
     }
 
     fun setVideoVisible(visible: Boolean) = engine.setVideoVisible(visible)
@@ -517,7 +509,6 @@ class PlayerViewModel(
      * surface left to represent it).
      */
     override fun hidePlayer(origin: PageOrigin) {
-        if (!acceptsPageCallback(playbackOrigin, origin)) return
         val state = _uiState.value
         if (state.mini) return
         if (!state.visible) return
@@ -532,15 +523,10 @@ class PlayerViewModel(
         stopAndHide()
     }
 
-    /** Page left watch (JS or tab URL). Same path as [hidePlayer]. */
+    /** Native browse left the watch surface. Same path as [hidePlayer]. */
     fun onLeaveWatch() = hidePlayer(PageOrigin.HOST)
 
     override fun setPlayerLayout(topDp: Int, heightDp: Int, origin: PageOrigin) {
-        if (!acceptsPageCallback(playbackOrigin, origin)) return
-        // Viewport-relative page-player box from player-hook.js. The top is
-        // consumed by PlayerSurface (converted to window space with the
-        // system-bar inset — the overlay sits one level above the inset-padded
-        // WebView); the height sizes the embedded overlay.
         _uiState.update {
             it.copy(
                 pageTopDp = topDp,
@@ -553,7 +539,7 @@ class PlayerViewModel(
     }
 
     override fun setPlayerBounds(left: Int, top: Int, width: Int, height: Int, viewportWidth: Int, origin: PageOrigin) {
-        if (!acceptsPageCallback(playbackOrigin, origin) || width <= 0 || height <= 0 || viewportWidth <= 0) return
+        if (width <= 0 || height <= 0 || viewportWidth <= 0) return
         _uiState.update { it.copy(pageLeftDp = left, pageTopDp = top, pageWidthDp = width,
             pageHeightDp = height, pageViewportWidthDp = viewportWidth) }
     }
@@ -695,18 +681,9 @@ class PlayerViewModel(
         return true
     }
 
-    /** JS `Bridge.setPageHasPlaylist(bool)` lands here via Bridge. */
+    /** Playlist presence is always false in native mode (queue only). */
     fun onPageHasPlaylist(has: Boolean) {
-        if (pageHasPlaylist == has) return
-        pageHasPlaylist = has
-        val nav = queueNavAvailability()
-        pushNavIfChanged(nav.next, nav.previous)
-        _uiState.update {
-            it.copy(
-                hasNext = nav.next,
-                hasPrevious = nav.previous,
-            )
-        }
+        if (!has) return
     }
 
     // -- PlayerPlaybackActions --
@@ -839,34 +816,14 @@ class PlayerViewModel(
         return queue.state.value.items.any { it.videoId == id }
     }
 
-    /** canGoBack is a synchronous WebView read; the 4 Hz tick must not re-ask it. */
-    private var pageCanGoBackCache = false
-    private var pageCanGoBackAtMs = 0L
-
-    private fun pageCanGoBack(): Boolean {
-        val now = SystemClock.elapsedRealtime()
-        if (now - pageCanGoBackAtMs >= CAN_GO_BACK_REFRESH_MS) {
-            pageCanGoBackAtMs = now
-            pageCanGoBackCache = watchPage?.canGoBack() == true
-        }
-        return pageCanGoBackCache
-    }
-
-    /**
-     * Navigation availability: local queue (enabled + non-empty) wins over the
-     * page playlist in the watch page; WebView back is the previous-only
-     * fallback.
-     */
+    /** Navigation availability: local queue only (no page playlist). */
     private fun queueNavAvailability(): QueueNav {
-        val canGoBack = pageCanGoBack()
         val id = playbackQueueId()
         val queueActive = queueActive()
         return queueNav(
             queueActive = queueActive,
             queueHasNext = queueActive && queue.next(id) != null,
             inQueueAndHasPrevious = queueActive && currentInQueue() && queue.previous(id) != null,
-            pageHasPlaylist = pageHasPlaylist,
-            pageCanGoBack = canGoBack,
         )
     }
 
@@ -878,52 +835,20 @@ class PlayerViewModel(
             queue.next(playbackQueueId())?.url?.let { startPlayback(it, keepMini = true) }
             return
         }
-        if (pageHasPlaylist) navigatePlaylist(1)
     }
 
     fun skipToPrevious() {
-        // A previous tap past the
-        // first seconds restarts the current video; only near the start does
-        // it actually go back — queue first, then the page playlist, then
-        // WebView history.
         if (engine.snapshot.value.positionMs > PREVIOUS_RESTART_MS) {
             engine.seekTo(0)
             return
         }
-        val canGoBack = watchPage?.canGoBack() == true
         if (queueActive()) {
             val prev = if (currentInQueue()) queue.previous(playbackQueueId()) else null
             if (prev != null) {
                 startPlayback(prev.url, keepMini = true)
                 return
             }
-            if (canGoBack) watchPageGoBack()
-            return
         }
-        if (pageHasPlaylist) {
-            navigatePlaylist(-1, fallbackToBack = canGoBack)
-            return
-        }
-        if (canGoBack) watchPageGoBack()
-    }
-
-    /** Runs the page's playlist nav; sentinel answers route to WebView back. */
-    private fun navigatePlaylist(dir: Int, fallbackToBack: Boolean = false) {
-        val page = watchPage ?: return
-        page.evaluate("window.__playlistNav && window.__playlistNav($dir);") { result ->
-            when (result?.trim()) {
-                // Any no-op answer falls back to WebView back navigation.
-                null, "\"missing-playlist\"", "\"missing-current-video-id\"",
-                "\"missing-current-video\"", "\"missing-target\"", "\"playlist-head\"",
-                "\"playlist-end\"",
-                -> if (fallbackToBack) watchPageGoBack()
-                // "navigating": the page changes URL; the watch hook replays it.
-            }
-        }
-    }
-
-    private fun watchPageGoBack() {
-        watchPage?.goBack()
     }
 
     override fun onNext() = skipToNext()
@@ -1163,7 +1088,6 @@ class PlayerViewModel(
     private fun onPlaybackEnded() {
         if (!engine.snapshot.value.ended || handledEndSeq == playbackRequestSeq) return
         handledEndSeq = playbackRequestSeq
-        // Queue and playlist playback take priority over page autoplay.
         val queueContext = queueActive()
         val current = playbackQueueId()
         val target = when (_uiState.value.loopMode) {
@@ -1174,38 +1098,13 @@ class PlayerViewModel(
             LoopMode.LOOP_ONE, LoopMode.PAUSE_AT_END -> null
         }
         if (target != null) {
-            // Auto-advance keeps the current surface (stays mini while suspended).
             startPlayback(target.url, keepMini = true)
             return
-        }
-        if (!queueContext && pageHasPlaylist &&
-            _uiState.value.loopMode == LoopMode.QUEUE_NEXT
-        ) {
-            watchPage?.evaluate("window.__playlistNav && window.__playlistNav(1);") { }
-            return
-        }
-        if (queueContext || pageHasPlaylist || inShorts || _uiState.value.loopMode != LoopMode.QUEUE_NEXT) return
-        val page = watchPage ?: return
-        val id = engine.snapshot.value.videoId ?: return
-        val token = playbackRequestSeq
-        val origin = page.origin()
-        val request = autoplayRequestId.incrementAndGet()
-        autoplayOrigin = origin
-        page.evaluate("JSON.stringify(window.__watchAutoplayNext?.() ?? null);") { raw ->
-            if (request != autoplayRequestId.get() || token != playbackRequestSeq || watchPage !== page || page.origin() != origin ||
-                engine.snapshot.value.videoId != id || !engine.snapshot.value.ended) return@evaluate
-            if (_uiState.value.loopMode != LoopMode.QUEUE_NEXT || queueActive() || pageHasPlaylist) return@evaluate
-            val candidate = WatchAutoplayCandidate.parse(raw, id) ?: return@evaluate
-            val gson = Gson()
-            page.evaluate("window.__watchAutoplayAdvance?.(${gson.toJson(id)},${gson.toJson(candidate.url)},$request) === true;") { }
         }
     }
 
     override fun canAutoplayAdvance(videoId: String, requestId: Long, origin: PageOrigin): Boolean {
-        val snapshot = engine.snapshot.value
-        return requestId == autoplayRequestId.get() && autoplayOrigin == origin &&
-            snapshot.videoId == videoId && snapshot.ended && _uiState.value.visible &&
-            _uiState.value.loopMode == LoopMode.QUEUE_NEXT && !queueActive() && !pageHasPlaylist && !inShorts
+        return false
     }
 
     // Weak on purpose: this VM is a process-scoped singleton and the view
@@ -1296,8 +1195,6 @@ class PlayerViewModel(
 
     companion object {
         private const val SEEK_ACCUM_WINDOW_MS = 600L
-        /** Rate limit for the synchronous WebView canGoBack read. */
-        private const val CAN_GO_BACK_REFRESH_MS = 1_000L
         private const val KEY_RESIZE = "player:resize_mode"
         private const val KEY_SUBTITLE_STYLE = "player:subtitle_style"
 
@@ -1314,34 +1211,21 @@ class PlayerViewModel(
 
         /**
          * Pure priority rules behind [queueNavAvailability]: the local queue
-         * wins over the page playlist, and the watch page's back
-         * history is a previous-only fallback. Static so the rules stay
-         * unit-testable.
+         * is the only next/previous source in native mode. Static so the
+         * rules stay unit-testable.
          */
         internal fun queueNav(
             queueActive: Boolean,
             queueHasNext: Boolean,
             inQueueAndHasPrevious: Boolean,
-            pageHasPlaylist: Boolean,
-            pageCanGoBack: Boolean,
+            pageHasPlaylist: Boolean = false,
+            pageCanGoBack: Boolean = false,
         ): QueueNav = when {
-            queueActive -> QueueNav(next = queueHasNext, previous = inQueueAndHasPrevious || pageCanGoBack)
-            else -> QueueNav(next = pageHasPlaylist, previous = pageCanGoBack)
+            queueActive -> QueueNav(next = queueHasNext, previous = inQueueAndHasPrevious)
+            else -> QueueNav(next = false, previous = false)
         }
 
-        /**
-         * Page callbacks apply when they come from the host, from the playing
-         * tab's current-or-newer document, or when no page owns playback yet.
-         * Another tab, or an older document on the same tab, is ignored.
-         */
-        internal fun acceptsPageCallback(owner: PageOrigin?, incoming: PageOrigin): Boolean {
-            if (incoming.isHost) return true
-            if (owner == null || owner.isHost) return true
-            return incoming.tabId == owner.tabId &&
-                incoming.documentGeneration >= owner.documentGeneration
-        }
-
-        /** Only a watch page can expand the native mini-player. */
+        /** Only a watch URL can expand the native mini-player. */
         internal fun shouldExpandMiniOnReturn(pageUrl: String?): Boolean =
             !PageKind.isShorts(pageUrl) && VideoId.parse(pageUrl) != null
 

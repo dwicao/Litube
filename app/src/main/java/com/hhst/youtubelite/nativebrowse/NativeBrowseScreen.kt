@@ -193,6 +193,116 @@ private fun PlaylistCard(item: NativePlaylistItem, onOpen: () -> Unit) {
 }
 
 @Composable
+fun NativeCommentsSheet(
+    viewModel: NativeBrowseViewModel = koinViewModel(),
+    onClose: () -> Unit = {},
+) {
+    val state by viewModel.commentsState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = onClose) {
+                Icon(painterResource(R.drawable.ic_close), contentDescription = null)
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                state.isLoading && state.items.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                state.disabled -> ErrorView("Comments disabled", {}, Modifier.align(Alignment.Center))
+                state.error != null && state.items.isEmpty() ->
+                    ErrorView(state.error.orEmpty(), { viewModel.loadComments(state.videoId) }, Modifier.align(Alignment.Center))
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.items, key = { it.commentId }) { comment ->
+                        CommentRow(comment)
+                    }
+                    if (state.isAppending) {
+                        item(key = "appending") {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(Modifier.size(28.dp))
+                            }
+                        }
+                    }
+                    if (state.nextPage != null && !state.isAppending) {
+                        item(key = "loadmore") {
+                            LaunchedEffect(state.nextPage) { viewModel.loadMoreComments() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentRow(comment: NativeComment) {
+    Row(Modifier.fillMaxWidth().padding(8.dp)) {
+        YoutubeThumb(
+            url = comment.avatarUrl,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(comment.author, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false))
+                comment.publishedText?.let {
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (comment.pinned) {
+                Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(comment.text, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+fun NativeShortsScreen(
+    viewModel: NativeBrowseViewModel = koinViewModel(),
+    onPlayVideo: (url: String) -> Unit,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val shorts = state.page.items.filterIsInstance<NativeBrowseItem.Video>()
+        .filter { it.item.isShort }
+        .ifEmpty { state.page.items.filterIsInstance<NativeBrowseItem.Video>() }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState { shorts.size }
+    androidx.compose.foundation.pager.VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+    ) { index ->
+        val item = shorts.getOrNull(index)?.item ?: return@VerticalPager
+        Box(Modifier.fillMaxSize().clickable { onPlayVideo(item.url) }) {
+            YoutubeThumb(
+                url = item.thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                Text(item.title, style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                item.author?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { viewModel.search("shorts") }
+}
+
+@Composable
 private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(message, style = MaterialTheme.typography.bodyMedium)

@@ -1,22 +1,13 @@
 package com.hhst.youtubelite.extractor
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import android.webkit.JavascriptInterface
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.annotation.RequiresApi
 import androidx.javascriptengine.IsolateStartupParameters
 import androidx.javascriptengine.JavaScriptIsolate
 import androidx.javascriptengine.JavaScriptSandbox
 import com.google.gson.Gson
-import com.hhst.youtubelite.core.AndroidWebViewMainGate
-import com.hhst.youtubelite.core.WebViewTimerOccupancy
-import com.hhst.youtubelite.core.WebViewTimerOwner
 import org.schabi.newpipe.extractor.services.youtube.streams.ExtractionContext
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeoutException
@@ -24,13 +15,11 @@ import java.util.concurrent.Future
 import java.io.Reader
 import androidx.javascriptengine.IsolateTerminatedException
 import androidx.javascriptengine.MemoryLimitExceededException
-import androidx.webkit.WebViewCompat
 import java.io.File
 import java.io.IOException
 import com.google.common.util.concurrent.SettableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 
 /** One deadline-aware permit; queued playback precedes speculative/download work. */
@@ -219,75 +208,6 @@ internal class SandboxRuntime private constructor(
 }
 
 /** Independent hidden renderer, no external navigation, file access or renderer network. */
-internal class HiddenJavascriptRuntime(
-    private val app: Context,
-    private val timers: WebViewTimerOccupancy,
-    private val owner: WebViewTimerOwner,
-    private val userAgent: String,
-) : JavascriptRuntime {
-    private val main = AndroidWebViewMainGate()
-    private val pending = ConcurrentHashMap<Long, SettableFuture<String>>()
-    private val sequence = AtomicLong()
-    private var view: WebView? = null
-    override val version = "webview:${WebViewCompat.getCurrentWebViewPackage(app)?.versionName}"
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun initialize(context: ExtractionContext) {
-        if (view != null) return
-        val ready = SettableFuture.create<Unit>()
-        main.run {
-            view = WebView(app).apply {
-                timers.attach(this)
-                settings.javaScriptEnabled = true
-                settings.blockNetworkLoads = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                settings.domStorageEnabled = false
-                settings.userAgentString = userAgent
-                addJavascriptInterface(Callbacks(), "JsResult")
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
-                    override fun onPageFinished(view: WebView, url: String) { ready.set(Unit) }
-                    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                        pending.values.forEach { it.setException(IOException("JS_RENDERER_GONE")) }
-                        close()
-                        return true
-                    }
-                }
-                loadDataWithBaseURL(YoutubeSessionProvider.ORIGIN, "<!doctype html><title>JS</title>", "text/html", "UTF-8", null)
-            }
-        }
-        await(ready, 5_000, context) { close() }
-    }
-
-    private inner class Callbacks {
-        @JavascriptInterface fun result(id: Long, value: String) { pending.remove(id)?.set(value) }
-        @JavascriptInterface fun error(id: Long, kind: String) {
-            val safe = kind.takeIf { it in setOf("Error", "TypeError", "ReferenceError", "RangeError", "SyntaxError") } ?: "Error"
-            pending.remove(id)?.setException(IOException("JS_EVALUATION_$safe"))
-        }
-    }
-
-    override fun evaluate(code: String, timeoutMs: Long, context: ExtractionContext): String =
-        timers.withOwner(owner) {
-            initialize(context)
-            val id = sequence.incrementAndGet()
-            val future = SettableFuture.create<String>()
-            pending[id] = future
-            try {
-                main.run {
-                    view?.evaluateJavascript("Promise.resolve().then(function(){return (0,eval)(${Gson().toJson(code)});}).then(function(r){JsResult.result($id,String(r));},function(e){JsResult.error($id,e&&e.name||'Error');});", null)
-                }
-                await(future, timeoutMs, context) { close() }
-            } finally { pending.remove(id) }
-        }
-
-    override fun close() {
-        pending.values.forEach { it.setException(IOException("JS_RUNTIME_CLOSED")) }
-        pending.clear()
-        main.run { view?.removeJavascriptInterface("JsResult"); view?.destroy(); view = null }
-    }
-}
 
 internal fun <T> await(future: Future<T>, timeoutMs: Long,
                        context: ExtractionContext, abort: () -> Unit): T {

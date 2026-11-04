@@ -1,6 +1,5 @@
 package com.hhst.youtubelite.downloader.net
 
-import android.webkit.CookieManager
 import com.hhst.youtubelite.downloader.core.DownloadComponentSource
 import com.hhst.youtubelite.extractor.YoutubeMediaRequests
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,11 +13,6 @@ fun interface DownloadCookieSource {
 
 object NoCookies : DownloadCookieSource {
     override fun cookie(url: String): String? = null
-}
-
-object WebViewCookies : DownloadCookieSource {
-    override fun cookie(url: String): String? =
-        runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull()
 }
 
 /**

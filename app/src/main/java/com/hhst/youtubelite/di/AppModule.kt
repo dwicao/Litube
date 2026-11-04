@@ -31,7 +31,6 @@ import com.hhst.youtubelite.downloader.io.DownloadFinalizerImpl
 import com.hhst.youtubelite.downloader.net.DownloadHttpClients
 import com.hhst.youtubelite.downloader.net.DownloadTransportImpl
 import com.hhst.youtubelite.downloader.net.ForbiddenRecovery
-import com.hhst.youtubelite.downloader.net.WebViewCookies
 import com.hhst.youtubelite.downloader.engine.AndroidNotificationPort
 import com.hhst.youtubelite.downloader.engine.DownloadNotificationController
 import com.hhst.youtubelite.downloader.engine.DownloadNotificationPort
@@ -43,8 +42,6 @@ import com.hhst.youtubelite.downloader.resolve.DownloadPoTokenLifecycle
 import com.hhst.youtubelite.downloader.resolve.DownloadResolverImpl
 import com.hhst.youtubelite.downloader.resolve.SharedExtractorCatalogSource
 import com.hhst.youtubelite.downloader.ui.DownloadViewModel
-import com.hhst.youtubelite.core.AndroidWebViewTimerClock
-import com.hhst.youtubelite.core.WebViewTimerOccupancy
 import com.hhst.youtubelite.downloader.engine.AndroidUidtJobPort
 import com.hhst.youtubelite.downloader.engine.AndroidWorkEnqueuePort
 import com.hhst.youtubelite.downloader.engine.BackgroundDownloadScheduler
@@ -117,15 +114,13 @@ val appModule = module {
     single { HapticsController(androidContext(), get()) }
 
     single { HttpDownloader(get()) }
-    single { WebViewTimerOccupancy(AndroidWebViewTimerClock()) }
     single { HeavyJsGate() }
     single { ExtractionDiagnostics() }
     single { YoutubeSessionProvider(androidContext(), get(), get()) }
-    single { BrowserPlayerResponses(get()) }
     single { YoutubeMediaRequests(get<YoutubeSessionProvider>(), get()) }
-    single { AndroidChallengeSolver(androidContext(), get(), get()) }
-    single { PoTokenProvider(androidContext(), get(), get()) }
-    single { YoutubeExtractionHost(get(), get(), get(), get(), get(), get(), get()) }
+    single { AndroidChallengeSolver(androidContext(), get()) }
+    single { PoTokenProvider(androidContext(), get()) }
+    single { YoutubeExtractionHost(get(), get(), get(), get(), get(), get()) }
     single { OEmbedTitleFetcher(get()) }
     single {
         Extractor(
@@ -147,7 +142,7 @@ val appModule = module {
             client = get<OkHttpClient>(named("downloadHttp")).newBuilder()
                 .followRedirects(false).followSslRedirects(false)
                 .addInterceptor(get<YoutubeMediaRequests>().interceptor()).build(),
-            cookies = WebViewCookies,
+            cookies = com.hhst.youtubelite.downloader.net.NoCookies,
             network = get(),
             wifiOnlyProvider = { prefs.wifiOnly() },
             forbidden = ForbiddenRecovery { taskId, identity ->
@@ -249,6 +244,7 @@ val appModule = module {
     viewModelOf(::BrowserViewModel)
     viewModel { ExtensionViewModel(manager = get(), pipSupported = PipSupport.isSupported(androidContext())) }
     single { com.hhst.youtubelite.nativebrowse.NativeBrowseRepository() }
+    single { com.hhst.youtubelite.nativebrowse.NativeSubscriptionStore(get()) }
     viewModel { com.hhst.youtubelite.nativebrowse.NativeBrowseViewModel(get()) }
 
     single {

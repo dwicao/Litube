@@ -111,7 +111,7 @@ internal fun Promise<Stream>.resolveStream(
  *
  * Reuses [PlayerPage]'s extractor when the player page was already fetched —
  * `fetchNextResponse` then costs one `/next` POST and nothing else. When
- * chapters resolve first (WebView prefetch race), this blocks on the shared
+ * chapters resolve first, this blocks on the shared
  * player page instead of issuing a second `/player`; only if that fetch
  * *fails* does a private extractor run here, requesting just `/next`.
  */

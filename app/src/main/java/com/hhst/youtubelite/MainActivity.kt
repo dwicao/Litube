@@ -28,8 +28,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.hhst.youtubelite.browser.PageKind
-import com.hhst.youtubelite.browser.UrlPolicy
+import com.hhst.youtubelite.nativebrowse.NativePageKind as PageKind
+import com.hhst.youtubelite.nativebrowse.NativeUrlPolicy as UrlPolicy
 import com.hhst.youtubelite.core.PipSupport
 import com.hhst.youtubelite.core.PipAutoEnter
 import com.hhst.youtubelite.downloader.core.DownloadShareParser

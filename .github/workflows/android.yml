@@ -32,8 +32,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Page script tests
-        run: node --test app/src/test/script/*.test.cjs
       - name: Unit tests, Lint and debug build
         run: >-
           bash gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
@@ -143,8 +141,6 @@ jobs:
               grep -Eq '^OK \([1-9][0-9]* tests?\)' "device-results/$label.txt"
             }
             classes=(
-              com.hhst.youtubelite.browser.TransientUiAndroidTest
-              com.hhst.youtubelite.browser.ExternalRouteAndroidTest
               com.hhst.youtubelite.player.engine.PipDismissAndroidTest
               com.hhst.youtubelite.diagnostics.DiagnosticSaveAndroidTest
               com.hhst.youtubelite.player.surface.FullscreenSheetAndroidTest
@@ -215,11 +211,39 @@ jobs:
             echo "storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}" >> "$RUNNER_TEMP/signing.properties"
             echo "keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}" >> "$RUNNER_TEMP/signing.properties"
             echo "keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}" >> "$RUNNER_TEMP/signing.properties"
+          else
+            KEYSTORE="$ANDROID_HOME/test-key.keystore"
+            if [ ! -f "$KEYSTORE" ]; then
+              KEYSTORE="$ANDROID_SDK_ROOT/test-key.keystore"
+            fi
+            if [ ! -f "$KEYSTORE" ]; then
+              KEYSTORE="$(find "$ANDROID_HOME" "$ANDROID_SDK_ROOT" -name '*.keystore' 2>/dev/null | head -n 1)"
+            fi
+            if [ -n "$KEYSTORE" ] && [ -f "$KEYSTORE" ]; then
+              {
+                echo "storeFile=$KEYSTORE"
+                echo "storePassword=android"
+                echo "keyAlias=androiddebugkey"
+                echo "keyPassword=android"
+              } >> "$RUNNER_TEMP/signing.properties"
+            else
+              keytool -genkeypair -v -keystore "$RUNNER_TEMP/release.keystore" \
+                -alias litube -keyalg RSA -keysize 2048 -validity 10950 \
+                -storepass android -keypass android \
+                -dname "CN=Litube, OU=Litube, O=Litube, L=Unknown, ST=Unknown, C=US"
+              {
+                echo "storeFile=$RUNNER_TEMP/release.keystore"
+                echo "storePassword=android"
+                echo "keyAlias=litube"
+                echo "keyPassword=android"
+              } >> "$RUNNER_TEMP/signing.properties"
+            fi
           fi
+          echo "SIGNING_PROPERTIES=$RUNNER_TEMP/signing.properties" >> "$GITHUB_ENV"
       - name: Build signed release APK
         run: >-
           bash gradlew :app:assembleRelease
-          ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' && '-PsigningProperties=$RUNNER_TEMP/signing.properties' || '' }}
+          -PsigningProperties="$SIGNING_PROPERTIES"
           --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process
           "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" --stacktrace
       - name: Rename APK and generate update.json
