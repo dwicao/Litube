@@ -1,0 +1,3 @@
+- Fix trending feed and search playback URLs.
+- Stabilize anonymous playback session and error reporting.
+- Replace embedded browser with native Android components.
