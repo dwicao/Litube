@@ -1,14 +1,13 @@
 package com.hhst.youtubelite.nativebrowse
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.hhst.youtubelite.extractor.VideoId
 import kotlinx.coroutines.flow.StateFlow
 
 class NativeBrowseViewModel(
     repository: NativeBrowseRepository? = null,
 ) : ViewModel() {
-    private val repo = repository ?: NativeBrowseRepository(viewModelScope)
+    private val repo = repository ?: NativeBrowseRepository()
     val state: StateFlow<NativeBrowseState> = repo.state
 
     init {

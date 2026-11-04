@@ -73,7 +73,7 @@ fun NativeBrowseScreen(
                     contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    state.title?.let { title ->
+                    state.page.title?.let { title ->
                         item(key = "header") {
                             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(8.dp))
                         }

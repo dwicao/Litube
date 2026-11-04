@@ -153,7 +153,7 @@ class NativeBrowseRepository {
                     thumbnailUrl = thumbnails.lastOrNull()?.url,
                     url = streamUrl,
                     isLive = false,
-                    isShort = streamUrl.contains("/shorts/") || shortFormContent,
+                    isShort = streamUrl.contains("/shorts/") || isShortFormContent,
                 ))
             }
             is ChannelInfoItem -> NativeBrowseItem.Channel(NativeChannelItem(
@@ -175,5 +175,5 @@ class NativeBrowseRepository {
         }
     }
 
-    fun diagnosticContext(): DiagnosticContext = DiagnosticContext(tabId = -2L)
+    fun diagnosticContext(): DiagnosticContext = DiagnosticContext()
 }

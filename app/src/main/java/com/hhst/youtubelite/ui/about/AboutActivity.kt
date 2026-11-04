@@ -82,7 +82,7 @@ class AboutActivity : ComponentActivity() {
             AboutScreen(applicationInfo.loadLabel(packageManager).toString(), version, { finish() }, busy, status,
                 onSource = { openUrl(SOURCE) },
                 onUpdate = { action("check_update") {
-                    when (val result = UpdateChecker.check(get(), version)) {
+                    when (val result = UpdateChecker.check(get<okhttp3.OkHttpClient>(), version)) {
                         is UpdateResult.Available -> {
                             val info = result.info
                             openUrl(info.apkUrl)
