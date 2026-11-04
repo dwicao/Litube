@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.security.MessageDigest
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -17,8 +18,6 @@ listOf(fileTree("src/main"),
         diagnosticDigest.update(providers.fileContents(layout.projectDirectory.file(source.relativeTo(projectDir).path)).asBytes.get())
     }
 val diagnosticBuildId = diagnosticDigest.digest().take(12).joinToString("") { "%02x".format(it) }
-
-import java.util.Properties
 
 android {
     namespace = "com.hhst.youtubelite"
