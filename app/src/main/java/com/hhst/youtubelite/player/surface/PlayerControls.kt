@@ -7,6 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,6 +58,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -665,6 +670,7 @@ fun CastStatusBanners(
 fun ErrorOverlay(
     message: String,
     onRetry: () -> Unit,
+    onShowDetails: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -689,14 +695,82 @@ fun ErrorOverlay(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
-        TextButton(onClick = onRetry) {
-            Text(
-                text = stringResource(R.string.retry),
-                color = PlayerUi.YtRed,
-                fontWeight = FontWeight.Medium,
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onRetry) {
+                Text(
+                    text = stringResource(R.string.retry),
+                    color = PlayerUi.YtRed,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            if (onShowDetails != null) {
+                TextButton(onClick = onShowDetails) {
+                    Text(
+                        text = "Details",
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+fun CopyableErrorDialog(
+    reportText: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val scroll = rememberScrollState()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        title = { Text(stringResource(R.string.player_error)) },
+        text = {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .background(Color(0xFF1B1B1B), RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = reportText,
+                            color = Color(0xFFE8E8E8),
+                            fontSize = 11.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scroll),
+                        )
+                    }
+                }
+                Text(
+                    text = "Copy this and send it so the failure can be fixed.",
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val clip = android.content.ClipData.newPlainText("playback-error", reportText)
+                context.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(clip)
+                android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+            }) { Text("Copy") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.retry), color = PlayerUi.YtRed) }
+            }
+        },
+    )
 }
 
 /** Fullscreen-only lock control; never inside More. */

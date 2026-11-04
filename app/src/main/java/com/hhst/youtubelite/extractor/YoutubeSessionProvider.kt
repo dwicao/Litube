@@ -92,6 +92,10 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
 
     fun captureBounded(videoId: String, fresh: Boolean, deadline: Long, current: () -> Boolean,
                        allowPage: Boolean = true): YoutubeSession = withPermit(deadline, current) {
+        // Snapshot the identity inputs ONCE. scopeHint()/digest recompute UA
+        // and route on every call, so comparing digests across calls can
+        // mismatch spuriously (UA captured at app start, route flaps) and
+        // surface as SESSION_CHANGED_OR_CANCELLED on healthy extractions.
         val ua = Constants.userAgent()
         val capturedRoute = networkGeneration.get()
         val nextIdentity = identityHint("", ua, capturedRoute)
@@ -109,7 +113,7 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
         if (fetchPage && !allowPage) throw IOException("SESSION_PAGE_REQUIRED")
         if (fetchPage) {
             val html = readPage("$ORIGIN/watch?v=$videoId&app=desktop", ua, emptyMap(), deadline) {
-                current() && generation == capturedGeneration && networkGeneration.get() == capturedRoute && scopeHint() == nextIdentity
+                current() && generation == capturedGeneration && networkGeneration.get() == capturedRoute
             }
             val parseStarted = System.nanoTime()
             val parsed = parseConfig(html)
@@ -121,7 +125,7 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
                 .find(html)?.groupValues?.get(1)?.replace("\\/", "/")
             if (js != null) parsed["PLAYER_JS_URL"] = if (js.startsWith('/')) ORIGIN + js else js
             synchronized(lock) {
-                if (generation != capturedGeneration || scopeHint() != nextIdentity) throw IOException("SESSION_CHANGED_OR_CANCELLED")
+                if (generation != capturedGeneration) throw IOException("SESSION_CHANGED_OR_CANCELLED")
                 if (configAt != 0L && configurationIdentity(config) != configurationIdentity(parsed)) {
                     generation++
                     capturedGeneration = generation
@@ -131,7 +135,7 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
             }
         }
         synchronized(lock) {
-        if (pageIdentity != identity || generation != capturedGeneration || scopeHint() != nextIdentity) throw IOException("SESSION_PAGE_MISMATCH")
+        if (pageIdentity != identity || generation != capturedGeneration) throw IOException("SESSION_PAGE_MISMATCH")
         val visitor = config.getString("VISITOR_DATA") ?: config.getObject("INNERTUBE_CONTEXT").getObject("client").getString("visitorData")
         val account = YoutubeSession.Account.ANONYMOUS
         val scope = digest("$identity:$generation:$visitor::${accountIndex(config)}")
@@ -196,7 +200,7 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
     }
 
     override fun isCurrent(session: YoutubeSession): Boolean = synchronized(lock) {
-        session.networkGeneration == networkGeneration.get() && session.key == currentKey() && identity == scopeHint()
+        session.networkGeneration == networkGeneration.get() && session.key == currentKeyLocked() && identity == scopeHintLocked()
     }
 
     /**
@@ -214,7 +218,9 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
         else -> null
     }
 
-    fun scopeHint(): String {
+    fun scopeHint(): String = synchronized(lock) { scopeHintLocked() }
+
+    private fun scopeHintLocked(): String {
         return identityHint("", Constants.userAgent(), networkGeneration.get())
     }
 
@@ -223,17 +229,21 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
     }
 
     /** Includes visitor/configuration changes. */
-    fun captureStamp(): String = synchronized(lock) { digest("${recoveryScope()}:$generation") }
+    fun captureStamp(): String = synchronized(lock) { digest("${recoveryScopeLocked()}:$generation") }
 
     /** Refreshes themselves advance generation; concurrent consumers still share one recovery. */
-    fun recoveryScope(): String = synchronized(lock) {
-        digest("${scopeHint()}:${configurationIdentity(config)}")
+    fun recoveryScope(): String = synchronized(lock) { recoveryScopeLocked() }
+
+    private fun recoveryScopeLocked(): String {
+        return digest("${scopeHintLocked()}:${configurationIdentity(config)}")
     }
 
-    private fun currentKey(): String {
+    private fun currentKeyLocked(): String {
         val visitor = config.getString("VISITOR_DATA") ?: config.getObject("INNERTUBE_CONTEXT").getObject("client").getString("visitorData")
         return digest("$identity:$generation:$visitor:${config.getString("DATASYNC_ID", "")}:${accountIndex(config)}")
     }
+
+    private fun currentKey(): String = synchronized(lock) { currentKeyLocked() }
 
     /** Persistent metadata is scoped to the anonymous session. */
     fun accountScope(session: YoutubeSession): String =

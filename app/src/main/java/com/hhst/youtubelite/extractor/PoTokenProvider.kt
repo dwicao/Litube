@@ -87,15 +87,18 @@ class PoTokenProvider(
             if (it <= 0) throw IOException("PO_INITIALIZATION_TIMEOUT")
         }
         fun loadedRuntime(): JavascriptRuntime {
-            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
-                throw java.io.IOException("PO_RUNTIME_UNAVAILABLE")
-            }
-            return runtime ?: SandboxRuntime.create(app, context)
+            return runtime ?: createSandboxRuntime(context)
                 ?.also {
                     runtime = it
                     val bundle = app.assets.open("potoken/bgutils.js").bufferedReader().use { input -> input.readText() }
                     it.evaluate(bundle + "\n'loaded'", remaining(), context)
                 } ?: throw java.io.IOException("PO_RUNTIME_UNAVAILABLE")
+        }
+
+        @androidx.annotation.RequiresApi(26)
+        fun createSandboxRuntime(context: ExtractionContext): SandboxRuntime? {
+            if (!androidx.javascriptengine.JavaScriptSandbox.isSupported()) return null
+            return SandboxRuntime.create(app, context)
         }
         fun pairedChallenge(config: NanoJsonObject): JsonObject? {
             config.remove("_BG_CHALLENGE")?.let {

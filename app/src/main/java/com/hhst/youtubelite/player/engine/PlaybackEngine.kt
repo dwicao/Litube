@@ -172,6 +172,8 @@ interface PlaybackApi {
     fun pauseLocal()
     /** Receiver identity after a successful recast (queue advance mid-session). */
     fun markReceiverIdentity(videoId: String, title: String, author: String?)
+    /** Last structured failure (extraction or player); null when the last load succeeded. */
+    val lastFailureReport: PlaybackFailureReport?
     fun seekTo(positionMs: Long)
     fun seekRelative(offsetMs: Long)
     fun setSpeed(speed: Float)
@@ -1976,14 +1978,28 @@ class PlaybackEngine(
 
     private fun playbackFailed(t: Throwable): String {
         Log.w(TAG, "playback failed", t)
-        val root = generateSequence(t) { it.cause }.take(12).toList()
-        if (root.any { it.message == "LIVE_STREAM_SOURCE_UNAVAILABLE" }) {
-            return appContext.getString(R.string.player_live_unavailable)
+        val stream = currentStream
+        val summary = stream?.let {
+            "formats=${it.formats.size} hls=${!it.hlsUrl.isNullOrBlank()} dash=${!it.dashUrl.isNullOrBlank()} " +
+                "videoOnly=${it.formats.count { f -> f.videoOnly }} audioOnly=${it.formats.count { f -> f.audioOnly }} " +
+                "clients=${it.formats.mapNotNull { f -> f.requestPlan?.profile?.name }.distinct()}"
         }
-        val detail = root.firstOrNull { !it.message.isNullOrBlank() }?.message?.take(120)
-        val base = appContext.getString(R.string.player_error)
-        return if (detail != null) "$base ($detail)" else base
+        val report = PlaybackFailureReport.build(videoId = _snapshot.value.videoId, failure = t,
+            streamSummary = summary, appVersion = appVersionName())
+        _lastFailureReport = report
+        val liveUnavailable = report.causes.any { it == "LIVE_STREAM_SOURCE_UNAVAILABLE" }
+        return if (liveUnavailable) appContext.getString(R.string.player_live_unavailable)
+        else report.shortMessage(appContext.getString(R.string.player_error))
     }
+
+    private fun appVersionName(): String = runCatching {
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
+    }.getOrDefault("unknown")
+
+    @Volatile
+    private var _lastFailureReport: PlaybackFailureReport? = null
+    override val lastFailureReport: PlaybackFailureReport?
+        get() = _lastFailureReport
 
     companion object {
         private const val TAG = "PlaybackEngine"

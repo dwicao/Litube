@@ -13,6 +13,7 @@ import com.hhst.youtubelite.extractor.VideoId
 import com.hhst.youtubelite.player.engine.CastSource
 import com.hhst.youtubelite.player.engine.LoopMode
 import com.hhst.youtubelite.player.engine.PlaybackApi
+import com.hhst.youtubelite.player.engine.PlaybackFailureReport
 import com.hhst.youtubelite.player.engine.PlaybackSnapshot
 import com.hhst.youtubelite.player.service.PlaybackCommandRouter
 import com.hhst.youtubelite.player.surface.GestureMath.GestureZone
@@ -300,6 +301,7 @@ class PlayerViewModelTest {
     private class FakeEngine : PlaybackApi {
         private val _snapshot = MutableStateFlow(PlaybackSnapshot())
         override val snapshot: StateFlow<PlaybackSnapshot> = _snapshot.asStateFlow()
+        override val lastFailureReport: PlaybackFailureReport? = null
 
         val playCalls = mutableListOf<String>()
         var stopCalls = 0

@@ -468,11 +468,22 @@ fun PlayerSurface(
                     }
 
                     if (state.error != null && !state.locked && !pip) {
+                        var showDetails by remember(state.videoId, state.error) { mutableStateOf(false) }
+                        val viewModel = org.koin.compose.koinInject<com.hhst.youtubelite.player.PlayerViewModel>()
                         ErrorOverlay(
                             message = state.error,
                             onRetry = callbacks::onRetry,
+                            onShowDetails = { showDetails = true },
                             modifier = Modifier.align(Alignment.Center),
                         )
+                        if (showDetails) {
+                            val report = remember(state.videoId, state.error) { viewModel.errorReportText() }
+                            CopyableErrorDialog(
+                                reportText = report,
+                                onRetry = { showDetails = false; callbacks.onRetry() },
+                                onDismiss = { showDetails = false },
+                            )
+                        }
                     }
 
                     if (PlayerUi.lockVisible(state.fullscreen, state.mini, state.locked, state.controlsVisible) && !pip) {

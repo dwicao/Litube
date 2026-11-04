@@ -54,7 +54,13 @@ class NativeBrowseRepository(
                 result.onSuccess { (items, next, title) ->
                     _state.update { it.copy(page = NativeBrowsePage(items, next?.url, title), isLoading = false) }
                 }.onFailure { failure ->
-                    _state.update { it.copy(isLoading = false, error = failure.message ?: "Load failed") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = failure.message?.takeIf { msg -> msg.isNotBlank() }
+                                ?: "${failure.javaClass.simpleName}: feed load failed",
+                        )
+                    }
                 }
             }
         }
@@ -72,7 +78,13 @@ class NativeBrowseRepository(
                         it.copy(page = it.page.copy(items = it.page.items + items, nextPage = next?.url), isAppending = false)
                     }
                 }.onFailure { failure ->
-                    _state.update { it.copy(isAppending = false, error = failure.message ?: "Load more failed") }
+                    _state.update {
+                        it.copy(
+                            isAppending = false,
+                            error = failure.message?.takeIf { msg -> msg.isNotBlank() }
+                                ?: "${failure.javaClass.simpleName}: more items failed",
+                        )
+                    }
                 }
             }
         }
@@ -154,9 +166,17 @@ class NativeBrowseRepository(
                 FetchResult(initial.items.mapNotNull { item -> item.toNative() }, continuation, null)
             }
             NativeBrowseKind.TRENDING, NativeBrowseKind.HOME -> {
-                val extractor = runCatching {
-                    youtube.kioskList.getExtractorById("Trending", null)
-                }.getOrNull() ?: youtube.kioskList.defaultKioskExtractor
+                // "Trending" kiosk was removed upstream (deprecated July 2025);
+                // the fork's default kiosk is now the Live feed. Never hardcode
+                // the id: enumerate what the installed extractor actually offers.
+                val kiosks = runCatching { youtube.kioskList }.getOrNull()
+                val available = kiosks?.availableKiosks?.toList().orEmpty()
+                val preferred = listOf("Trending", "Live", "Live streams", "Trending videos")
+                    .firstOrNull { it in available } ?: available.firstOrNull()
+                if (kiosks == null || preferred == null) {
+                    throw java.io.IOException("Kiosk list unavailable (found: $available)")
+                }
+                val extractor = kiosks.getExtractorById(preferred, null)
                 extractor.fetchPage()
                 val initial = extractor.initialPage
                 continuation = initial.nextPage

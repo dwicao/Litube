@@ -921,6 +921,13 @@ class PlayerViewModel(
 
     override fun onRetry() = engine.retry()
 
+    /** Full structured text of the last playback failure, for copy-paste bug reports. */
+    fun errorReportText(): String {
+        val report = engine.lastFailureReport
+            ?: return "videoId=${_uiState.value.videoId}\nerror=${_uiState.value.error ?: "(none)"}"
+        return report.fullText()
+    }
+
     override fun onQueueEnabled(enabled: Boolean) = queue.setEnabled(enabled)
     override fun onQueueClear() = queue.clear()
     override fun onQueueRemove(videoId: String) = queue.remove(videoId)
