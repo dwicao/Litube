@@ -2,6 +2,7 @@ package com.hhst.youtubelite.extractor
 
 import android.content.Context
 import com.grack.nanojson.JsonWriter
+import com.grack.nanojson.JsonParser as NanoParser
 import java.util.concurrent.Semaphore
 import java.util.concurrent.Executors
 import java.net.SocketException
@@ -23,13 +24,15 @@ import androidx.core.content.ContextCompat
 import com.grack.nanojson.JsonObject
 import com.hhst.youtubelite.core.Constants
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.schabi.newpipe.extractor.services.youtube.streams.YoutubeSession
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-/** Captures credentials once; consumers never merge a newer Cookie into an older response. */
+/** Anonymous session provider; no login cookies are read or stored. */
 class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
                              private val diagnostics: ExtractionDiagnostics? = null) : SessionProvider {
     private val networkGeneration = AtomicLong()
@@ -186,10 +189,10 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
     }
 
     /**
-     * Media bytes are fetched from CDN URLs that were already issued and carry no account
-     * credentials. A page-configuration refresh (experiment flags, player URL, MWEB/WEB config
-     * switch) therefore must not abort a read in flight; only a different signed-in account or a
-     * different network route does, because those can invalidate the issued URL or its audience.
+     * Media bytes are fetched from CDN URLs that were already issued. A
+     * page-configuration refresh therefore must not abort a read in flight;
+     * only a different network route does, because those can invalidate the
+     * issued URL or its audience.
      */
     fun isMediaCurrent(session: YoutubeSession): Boolean =
         mediaInvalidationReason(session) == null

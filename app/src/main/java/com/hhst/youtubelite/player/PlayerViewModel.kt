@@ -14,11 +14,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hhst.youtubelite.R
 import com.hhst.youtubelite.nativebrowse.NativePageKind as PageKind
-import com.hhst.youtubelite.browser.PageOrigin
-import com.hhst.youtubelite.browser.PlayerHooks
-import com.hhst.youtubelite.browser.WatchPage
-import com.hhst.youtubelite.browser.WatchAutoplayCandidate
-import com.google.gson.Gson
 import com.hhst.youtubelite.cast.CastController
 import com.hhst.youtubelite.cast.CastDevice
 import com.hhst.youtubelite.cast.LocalStreamProxy
@@ -160,7 +155,7 @@ class PlayerViewModel(
     private val cast: CastController,
     private val appContext: Context? = null,
     private val haptics: HapticsController? = null,
-) : ViewModel(), PlayerHooks, PlayerPlaybackActions {
+) : ViewModel(), PlayerPlaybackActions {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -174,7 +169,7 @@ class PlayerViewModel(
         compactPlayer = compact
     }
 
-    override fun isPlayerCompact(origin: PageOrigin): Boolean {
+    fun isPlayerCompact(): Boolean {
         val state = _uiState.value
         return compactPlayer && state.visible && !state.fullscreen && !state.mini
     }
@@ -262,9 +257,6 @@ class PlayerViewModel(
 
     /** Mini-player closed; the browser drops its suspended state. */
     var onWatchClosed: (() -> Unit)? = null
-
-    /** Watch-page operations unused in native mode; kept for interface compat. */
-    var watchPage: WatchPage? = null
 
     /** Installed once in the init block; the process-scoped router is never re-pointed. */
     private val commandHandler = object : PlaybackCommandRouter.Handler {
@@ -459,29 +451,19 @@ class PlayerViewModel(
 
     /** Play a video URL directly from native browse UI. */
     fun playNativeVideo(url: String) {
-        playVideo(url, PageOrigin.HOST)
-    }
-
-    /** Prepare a video without starting playback (selection prefetch). */
-    fun prepareNativeVideo(url: String) {
-        prepareVideo(url)
-    }
-
-    // -- PlayerHooks (native; origin always HOST) --
-
-    /** A shorts feed suspends local playback until the user resumes the preserved watch item. */
-    private var shortsPausedId: String? = null
-    @Volatile private var inShorts = false
-
-    override fun playVideo(url: String, origin: PageOrigin) {
         if (VideoId.parse(url) == shortsPausedId) { onReturnToWatch(url); return }
         shortsPausedId = null
         startPlayback(url, keepMini = _uiState.value.mini)
     }
 
-    override fun prepareVideo(url: String) {
+    /** Prepare a video without starting playback (selection prefetch). */
+    fun prepareNativeVideo(url: String) {
         engine.preparePlayback(url)
     }
+
+    /** A shorts feed suspends local playback until the user resumes the preserved watch item. */
+    private var shortsPausedId: String? = null
+    @Volatile private var inShorts = false
 
     fun setVideoVisible(visible: Boolean) = engine.setVideoVisible(visible)
 
@@ -500,15 +482,15 @@ class PlayerViewModel(
     fun onShortsClosed() { inShorts = false }
 
     /**
-     * Page left the active watch surface (in-place navigation or tab switch).
-     * While suspended/mini the hook is a no-op — the mini-player
+     * Left the active watch surface (navigation or tab switch).
+     * While suspended/mini this is a no-op — the mini-player
      * owns the player; otherwise the player hides completely.
      *
      * With background play enabled the hide is UI-only: the engine keeps
      * playing and the media notification owns control (there is no mini
      * surface left to represent it).
      */
-    override fun hidePlayer(origin: PageOrigin) {
+    fun hidePlayer() {
         val state = _uiState.value
         if (state.mini) return
         if (!state.visible) return
@@ -523,10 +505,10 @@ class PlayerViewModel(
         stopAndHide()
     }
 
-    /** Native browse left the watch surface. Same path as [hidePlayer]. */
-    fun onLeaveWatch() = hidePlayer(PageOrigin.HOST)
+    /** Native browse left the watch surface. */
+    fun onLeaveWatch() = hidePlayer()
 
-    override fun setPlayerLayout(topDp: Int, heightDp: Int, origin: PageOrigin) {
+    fun setPlayerLayout(topDp: Int, heightDp: Int) {
         _uiState.update {
             it.copy(
                 pageTopDp = topDp,
@@ -538,7 +520,7 @@ class PlayerViewModel(
         }
     }
 
-    override fun setPlayerBounds(left: Int, top: Int, width: Int, height: Int, viewportWidth: Int, origin: PageOrigin) {
+    fun setPlayerBounds(left: Int, top: Int, width: Int, height: Int, viewportWidth: Int) {
         if (width <= 0 || height <= 0 || viewportWidth <= 0) return
         _uiState.update { it.copy(pageLeftDp = left, pageTopDp = top, pageWidthDp = width,
             pageHeightDp = height, pageViewportWidthDp = viewportWidth) }
@@ -672,18 +654,13 @@ class PlayerViewModel(
         }
     }
 
-    override fun seekLoadedVideo(url: String, positionMs: Long): Boolean {
+    fun seekLoadedVideo(url: String, positionMs: Long): Boolean {
         val currentId = _uiState.value.videoId ?: return false
         val targetId = VideoId.parse(url) ?: return false
         if (currentId != targetId) return false
         autoplayRequestId.incrementAndGet()
         mainHandler.post { engine.seekTo(positionMs) }
         return true
-    }
-
-    /** Playlist presence is always false in native mode (queue only). */
-    fun onPageHasPlaylist(has: Boolean) {
-        if (!has) return
     }
 
     // -- PlayerPlaybackActions --
@@ -1103,10 +1080,6 @@ class PlayerViewModel(
         }
     }
 
-    override fun canAutoplayAdvance(videoId: String, requestId: Long, origin: PageOrigin): Boolean {
-        return false
-    }
-
     // Weak on purpose: this VM is a process-scoped singleton and the view
     // belongs to an activity window. Normal attach/detach pairs it, but a
     // missed dispose must not pin the activity in memory. The engine holds
@@ -1218,8 +1191,6 @@ class PlayerViewModel(
             queueActive: Boolean,
             queueHasNext: Boolean,
             inQueueAndHasPrevious: Boolean,
-            pageHasPlaylist: Boolean = false,
-            pageCanGoBack: Boolean = false,
         ): QueueNav = when {
             queueActive -> QueueNav(next = queueHasNext, previous = inQueueAndHasPrevious)
             else -> QueueNav(next = false, previous = false)

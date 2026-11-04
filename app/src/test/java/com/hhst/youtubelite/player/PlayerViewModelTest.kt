@@ -85,41 +85,33 @@ class PlayerViewModelTest {
     // -- queue navigation priority (pure rules) --
 
     @Test
-    fun queueNav_activeQueueWinsOverPagePlaylist() {
-        // The local queue owns "next" even when the page advertises a playlist;
-        // "previous" only comes from the queue (or page back as fallback).
+    fun queueNav_activeQueueOwnsNav() {
         val nav = PlayerViewModel.queueNav(
             queueActive = true,
             queueHasNext = true,
             inQueueAndHasPrevious = false,
-            pageHasPlaylist = true,
-            pageCanGoBack = false,
         )
         assertEquals(PlayerViewModel.QueueNav(next = true, previous = false), nav)
     }
 
     @Test
-    fun queueNav_pageBackIsPreviousOnlyFallback() {
+    fun queueNav_activeQueueWithoutNextHasNoNext() {
         val nav = PlayerViewModel.queueNav(
             queueActive = true,
             queueHasNext = false,
             inQueueAndHasPrevious = false,
-            pageHasPlaylist = false,
-            pageCanGoBack = true,
         )
-        assertEquals(PlayerViewModel.QueueNav(next = false, previous = true), nav)
+        assertEquals(PlayerViewModel.QueueNav(next = false, previous = false), nav)
     }
 
     @Test
-    fun queueNav_withoutQueue_pagePlaylistOwnsBoth() {
+    fun queueNav_withoutQueue_hasNoNav() {
         val nav = PlayerViewModel.queueNav(
             queueActive = false,
             queueHasNext = true,
             inQueueAndHasPrevious = true,
-            pageHasPlaylist = true,
-            pageCanGoBack = true,
         )
-        assertEquals(PlayerViewModel.QueueNav(next = true, previous = true), nav)
+        assertEquals(PlayerViewModel.QueueNav(next = false, previous = false), nav)
     }
 
     // -- cast handoff readiness (pure predicate of startPlayback's wait) --

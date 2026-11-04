@@ -112,14 +112,19 @@ val appModule = module {
     single { ExtensionManager(get()) }
     single { HapticsController(androidContext(), get()) }
 
-    single { HttpDownloader(get()) }
+    single { HttpDownloader(get<OkHttpClient>()) }
     single { HeavyJsGate() }
     single { ExtractionDiagnostics() }
-    single { YoutubeSessionProvider(androidContext(), get(), get()) }
-    single { YoutubeMediaRequests(get<YoutubeSessionProvider>(), get()) }
-    single { AndroidChallengeSolver(androidContext(), get()) }
-    single { PoTokenProvider(androidContext(), get()) }
-    single { YoutubeExtractionHost(get(), get(), get(), get(), get(), get()) }
+    single { YoutubeSessionProvider(androidContext(), get<OkHttpClient>(), get<ExtractionDiagnostics>()) }
+    single { YoutubeMediaRequests(get<YoutubeSessionProvider>(), get<ExtractionDiagnostics>()) }
+    single { AndroidChallengeSolver(androidContext(), get<HeavyJsGate>()) }
+    single { PoTokenProvider(androidContext(), get<HeavyJsGate>()) }
+    single {
+        YoutubeExtractionHost(
+            get<YoutubeSessionProvider>(), get<OkHttpClient>(), get<AndroidChallengeSolver>(),
+            get<PoTokenProvider>(), get<ExtractionDiagnostics>(), get<YoutubeMediaRequests>(),
+        )
+    }
     single { OEmbedTitleFetcher(get()) }
     single {
         Extractor(

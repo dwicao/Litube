@@ -448,24 +448,26 @@ fun BrowserScreen(
         mediaMenuUrl?.let { url ->
             val videoId = VideoId.parse(url)
             if (videoId != null) {
-                MediaItemMenuDialog(
-                    item = com.hhst.youtubelite.browser.Bridge.QueueItemJson(
-                        videoId = videoId,
-                        url = url,
-                        title = videoId,
-                    ),
-                    onQueue = {
-                        playerViewModel.onQueueAdd(
-                            QueueItem(
-                                videoId = videoId,
-                                url = url,
-                                title = videoId,
-                            ),
-                        )
-                        mediaMenuUrl = null
-                        Toast.makeText(context, context.getString(R.string.queue_item_added), Toast.LENGTH_SHORT).show()
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { mediaMenuUrl = null },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            playerViewModel.onQueueAdd(
+                                QueueItem(
+                                    videoId = videoId,
+                                    url = url,
+                                    title = videoId,
+                                ),
+                            )
+                            mediaMenuUrl = null
+                            Toast.makeText(context, context.getString(R.string.queue_item_added), Toast.LENGTH_SHORT).show()
+                        }) { Text("Queue") }
                     },
-                    onDismiss = { mediaMenuUrl = null },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { mediaMenuUrl = null }) { Text("Close") }
+                    },
+                    title = { Text(videoId) },
+                    text = { Text(url) },
                 )
             } else {
                 mediaMenuUrl = null

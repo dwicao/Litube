@@ -124,9 +124,7 @@ class YoutubeExtractionHost(
     @Volatile private var initFailedAt = 0L
     @Volatile private var preconnectedAt = 0L
 
-    init { sessions.onBrowserConfiguration = ::scheduleInitialize }
-
-    /** Coalesces browser configuration bursts into one background initialization. */
+    /** Coalesces session refresh bursts into one background initialization. */
     fun scheduleInitialize() {
         if (initQueued.compareAndSet(false, true)) initializer.execute {
             initQueued.set(false)
