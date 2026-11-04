@@ -18,6 +18,8 @@ listOf(fileTree("src/main"),
     }
 val diagnosticBuildId = diagnosticDigest.digest().take(12).joinToString("") { "%02x".format(it) }
 
+import java.util.Properties
+
 android {
     namespace = "com.hhst.youtubelite"
     compileSdk = 36
@@ -37,7 +39,7 @@ android {
         create("release") {
             val propsFile = project.findProperty("signingProperties")?.toString()?.let { file(it) }
             if (propsFile != null && propsFile.exists()) {
-                val props = java.util.Properties().apply { propsFile.inputStream().use(::load) }
+                val props = Properties().apply { propsFile.inputStream().use { load(it) } }
                 storeFile = file(props.getProperty("storeFile"))
                 storePassword = props.getProperty("storePassword")
                 keyAlias = props.getProperty("keyAlias")
