@@ -5,9 +5,9 @@ import com.hhst.youtubelite.extractor.VideoId
 import kotlinx.coroutines.flow.StateFlow
 
 class NativeBrowseViewModel(
-    repository: NativeBrowseRepository? = null,
+    repository: NativeBrowseRepository,
 ) : ViewModel() {
-    private val repo = repository ?: NativeBrowseRepository()
+    private val repo = repository
     val state: StateFlow<NativeBrowseState> = repo.state
     val commentsState: StateFlow<NativeCommentsState> = repo.commentsState
 

@@ -143,10 +143,18 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
         var url = initialUrl
         var transientRetried = false
         val client = http.newBuilder().followRedirects(false).followSslRedirects(false).build()
+        // Consent cookie prevents consent-page redirects that return HTML
+        // without any player config (empty ytcfg), which used to surface
+        // as a generic playback failure.
+        val consentCookies = cookies + mapOf(
+            ORIGIN to listOf(cookies[ORIGIN].orEmpty(), "SOCS=CAE=").filter { it.isNotBlank() }.joinToString("; "),
+            "https://youtube.com" to "SOCS=CAE=",
+            "https://m.youtube.com" to "SOCS=CAE=",
+        ).flatMap { (origin, value) -> listOf(origin to value) }.toMap()
         repeat(4) {
             val remaining = (deadline - System.nanoTime()) / 1_000_000
             if (remaining <= 0 || !current()) throw IOException("EXTRACTION_DEADLINE")
-            val call = client.newCall(pageRequest(url, ua, cookies))
+            val call = client.newCall(pageRequest(url, ua, consentCookies))
             call.timeout().timeout(minOf(10_000, remaining), TimeUnit.MILLISECONDS)
             val abort = cancellation.scheduleAtFixedRate({ if (System.nanoTime() >= deadline || !current()) call.cancel() }, 100, 100, TimeUnit.MILLISECONDS)
             val started = System.nanoTime()
@@ -270,6 +278,9 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
         } ?: 0
 
         internal fun parseConfig(html: String): JsonObject {
+            if (html.contains("consent.youtube.com") || html.contains("consent_not_given")) {
+                throw IOException("SESSION_CONSENT_REDIRECT")
+            }
             val result = JsonObject()
             jsonObjects(html, Regex("ytcfg\\.set\\(\\s*\\{")).forEach(result::putAll)
             val player = jsonObjects(html, Regex("ytInitialPlayerResponse\\s*=\\s*\\{")).firstOrNull()
@@ -288,7 +299,11 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
                 if (challenge != null && challenge.isNotEmpty()) result["_BG_CHALLENGE"] = challenge
                 else result["_BG_CHALLENGE_RAW"] = rawChallenge
             }
-            return JsonObject(result.filterKeys { it in CONFIG_FIELDS })
+            return JsonObject(result.filterKeys { it in CONFIG_FIELDS }).also {
+                if (!it.has("INNERTUBE_CONTEXT") || !it.has("INNERTUBE_API_KEY")) {
+                    throw IOException("SESSION_CONFIG_EMPTY")
+                }
+            }
         }
 
         private fun jsonObjects(html: String, marker: Regex): Sequence<JsonObject> = objectPayloads(html, marker)

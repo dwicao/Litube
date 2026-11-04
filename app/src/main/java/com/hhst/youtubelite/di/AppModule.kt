@@ -247,7 +247,7 @@ val appModule = module {
     }
     viewModelOf(::BrowserViewModel)
     viewModel { ExtensionViewModel(manager = get(), pipSupported = PipSupport.isSupported(androidContext())) }
-    single { com.hhst.youtubelite.nativebrowse.NativeBrowseRepository() }
+    single { com.hhst.youtubelite.nativebrowse.NativeBrowseRepository(get<com.hhst.youtubelite.extractor.HttpDownloader>()) }
     single { com.hhst.youtubelite.nativebrowse.NativeSubscriptionStore(get()) }
     viewModel { com.hhst.youtubelite.nativebrowse.NativeBrowseViewModel(get()) }
 

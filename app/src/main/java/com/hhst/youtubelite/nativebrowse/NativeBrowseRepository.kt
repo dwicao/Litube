@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.nativebrowse
 
 import com.hhst.youtubelite.diagnostics.DiagnosticContext
+import com.hhst.youtubelite.extractor.HttpDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,7 +21,12 @@ import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamType
 
-class NativeBrowseRepository {
+class NativeBrowseRepository(
+    private val downloader: HttpDownloader,
+) {
+    init {
+        runCatching { org.schabi.newpipe.extractor.NewPipe.init(downloader) }
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val youtube = ServiceList.YouTube
 

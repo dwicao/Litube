@@ -1976,9 +1976,13 @@ class PlaybackEngine(
 
     private fun playbackFailed(t: Throwable): String {
         Log.w(TAG, "playback failed", t)
-        val liveUnavailable = generateSequence(t) { it.cause }.take(12)
-            .any { it.message == "LIVE_STREAM_SOURCE_UNAVAILABLE" }
-        return appContext.getString(if (liveUnavailable) R.string.player_live_unavailable else R.string.player_error)
+        val root = generateSequence(t) { it.cause }.take(12).toList()
+        if (root.any { it.message == "LIVE_STREAM_SOURCE_UNAVAILABLE" }) {
+            return appContext.getString(R.string.player_live_unavailable)
+        }
+        val detail = root.firstOrNull { !it.message.isNullOrBlank() }?.message?.take(120)
+        val base = appContext.getString(R.string.player_error)
+        return if (detail != null) "$base ($detail)" else base
     }
 
     companion object {
