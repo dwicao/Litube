@@ -206,10 +206,10 @@ class PlayerViewModelTest {
         viewModel.onShortsOpened()
         assertFalse(viewModel.uiState.value.visible)
         viewModel.playNativeVideo(shortsUrl)
-        engine.settle(shortsId, positionMs = 1_000L)
+        assertFalse(viewModel.uiState.value.visible)
         viewModel.onShortsClosed()
         viewModel.onReturnToWatch(shortsUrl)
-        assertTrue(viewModel.uiState.value.visible)
+        assertFalse(viewModel.uiState.value.visible)
         viewModel.onMiniClose()
         viewModel.playNativeVideo(watchUrl)
         engine.settle(watchId, positionMs = 42_000L)
@@ -231,7 +231,10 @@ class PlayerViewModelTest {
     @Test
     fun onReturnToWatch_shortsCannotRestoreSurface() {
         bindViewModel()
+        viewModel.playNativeVideo(watchUrl)
+        engine.settle(watchId)
         viewModel.playNativeVideo(shortsUrl)
+        assertFalse(viewModel.uiState.value.visible)
         viewModel.onReturnToWatch(shortsUrl)
         assertFalse(viewModel.uiState.value.visible)
     }

@@ -1,7 +1,6 @@
 package com.hhst.youtubelite.extractor
 
 import android.content.Context
-import android.os.Build
 import androidx.javascriptengine.JavaScriptSandbox
 import org.schabi.newpipe.extractor.services.youtube.streams.ExtractionContext
 import java.io.IOException
@@ -13,11 +12,14 @@ internal class RemoteEjsRuntime(private val app: Context, private val userAgent:
 
     private fun runtime(context: ExtractionContext): SandboxRuntime {
         delegate?.let { return it }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !JavaScriptSandbox.isSupported()) {
-            throw IOException("JS_RUNTIME_UNAVAILABLE")
-        }
-        return SandboxRuntime.create(app, context)?.also { delegate = it }
+        return createSandbox(context)?.also { delegate = it }
             ?: throw IOException("JS_RUNTIME_UNAVAILABLE")
+    }
+
+    @androidx.annotation.RequiresApi(26)
+    private fun createSandbox(context: ExtractionContext): SandboxRuntime? {
+        if (!JavaScriptSandbox.isSupported()) return null
+        return SandboxRuntime.create(app, context)
     }
 
     override fun evaluate(code: String, timeoutMs: Long, context: ExtractionContext): String =

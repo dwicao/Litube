@@ -451,6 +451,10 @@ class PlayerViewModel(
 
     /** Play a video URL directly from native browse UI. */
     fun playNativeVideo(url: String) {
+        if (PageKind.isShorts(url)) {
+            onShortsOpened()
+            return
+        }
         if (VideoId.parse(url) == shortsPausedId) { onReturnToWatch(url); return }
         shortsPausedId = null
         startPlayback(url, keepMini = _uiState.value.mini)
@@ -528,7 +532,10 @@ class PlayerViewModel(
 
     /** An active watch page expands the preserved local player. */
     fun onReturnToWatch(pageUrl: String? = null) {
-        if (PageKind.isShorts(pageUrl)) return
+        if (PageKind.isShorts(pageUrl)) {
+            inShorts = false
+            return
+        }
         val state = _uiState.value
         if (shortsPausedId != null && VideoId.parse(pageUrl) == shortsPausedId) {
             inShorts = false
