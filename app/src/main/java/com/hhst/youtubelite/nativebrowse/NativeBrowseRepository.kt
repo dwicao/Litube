@@ -148,12 +148,14 @@ class NativeBrowseRepository {
                 FetchResult(initial.items.mapNotNull { item -> item.toNative() }, continuation, null)
             }
             NativeBrowseKind.TRENDING, NativeBrowseKind.HOME -> {
-                val extractor = youtube.kioskList.getExtractorById("Trending", null)
+                val extractor = runCatching {
+                    youtube.kioskList.getExtractorById("Trending", null)
+                }.getOrNull() ?: youtube.kioskList.defaultKioskExtractor
                 extractor.fetchPage()
                 val initial = extractor.initialPage
                 continuation = initial.nextPage
                 FetchResult(initial.items.mapNotNull { item -> (item as InfoItem).toNative() }, continuation,
-                    if (kind == NativeBrowseKind.HOME) null else "Trending")
+                    if (kind == NativeBrowseKind.HOME) null else runCatching { extractor.name }.getOrNull())
             }
             NativeBrowseKind.SUBSCRIPTIONS, NativeBrowseKind.LIBRARY -> {
                 FetchResult(emptyList(), null, null)
@@ -200,11 +202,7 @@ class NativeBrowseRepository {
         return when (this) {
             is StreamInfoItem -> {
                 val streamUrl = url
-                val parsedId = streamUrl.substringAfter("v=", "").substringBefore("&")
-                    .takeIf { it.isNotBlank() }
-                    ?: streamUrl.substringAfter("shorts/", "").substringBefore("?").substringBefore("/")
-                        .takeIf { it.isNotBlank() && !it.contains("/") }
-                    ?: streamUrl
+                val parsedId = com.hhst.youtubelite.extractor.VideoId.parse(streamUrl) ?: streamUrl
                 NativeBrowseItem.Video(NativeVideoItem(
                     videoId = parsedId,
                     title = name,
@@ -212,8 +210,10 @@ class NativeBrowseRepository {
                     durationSeconds = duration,
                     viewCount = viewCount,
                     thumbnailUrl = thumbnails.lastOrNull()?.url,
-                    url = streamUrl,
-                    isLive = false,
+                    url = com.hhst.youtubelite.extractor.VideoId.watchUrl(
+                        com.hhst.youtubelite.extractor.VideoId.parse(streamUrl) ?: parsedId,
+                    ),
+                    isLive = streamType == StreamType.LIVE_STREAM || streamType == StreamType.AUDIO_LIVE_STREAM,
                     isShort = streamUrl.contains("/shorts/") || isShortFormContent,
                 ))
             }
