@@ -27,8 +27,8 @@ android {
         applicationId = "com.hhst.litube"
         minSdk = 23
         targetSdk = 36
-        versionCode = 303
-        versionName = "3.0.3"
+        versionCode = 400
+        versionName = "4.0.0"
         buildConfigField("String", "DIAGNOSTIC_BUILD_ID", "\"$diagnosticBuildId\"")
         buildConfigField("String", "DIAGNOSTIC_DEPENDENCIES", "\"Media3=${libs.versions.media3.get()};OkHttp=${libs.versions.okhttp.get()};Gson=${libs.versions.gson.get()};NewPipe=${libs.newpipe.extractor.get().version}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
