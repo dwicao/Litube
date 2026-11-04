@@ -79,6 +79,12 @@ class PoTokenProvider(
         }
     }
 
+    @androidx.annotation.RequiresApi(26)
+    private fun createSandboxRuntime(context: ExtractionContext): SandboxRuntime? {
+        if (!androidx.javascriptengine.JavaScriptSandbox.isSupported()) return null
+        return SandboxRuntime.create(app, context)
+    }
+
     private fun initializeMinter(originalContext: ExtractionContext, newScope: String) {
         val context = originalContext.withTimeLimit(15_000)
         clear()
@@ -93,12 +99,6 @@ class PoTokenProvider(
                     val bundle = app.assets.open("potoken/bgutils.js").bufferedReader().use { input -> input.readText() }
                     it.evaluate(bundle + "\n'loaded'", remaining(), context)
                 } ?: throw java.io.IOException("PO_RUNTIME_UNAVAILABLE")
-        }
-
-        @androidx.annotation.RequiresApi(26)
-        fun createSandboxRuntime(context: ExtractionContext): SandboxRuntime? {
-            if (!androidx.javascriptengine.JavaScriptSandbox.isSupported()) return null
-            return SandboxRuntime.create(app, context)
         }
         fun pairedChallenge(config: NanoJsonObject): JsonObject? {
             config.remove("_BG_CHALLENGE")?.let {
