@@ -124,10 +124,16 @@ data class Extension(
                 title = R.string.downloads,
                 icon = R.drawable.ic_download,
             ),
+            nav(
+                id = NAV_NATIVE_BROWSE,
+                title = R.string.app_name,
+                icon = R.drawable.ic_more,
+            ),
         )
 
         const val NAV_DATA = "data"
         const val NAV_DOWNLOADS = "downloads"
+        const val NAV_NATIVE_BROWSE = "native_browse"
 
         fun group(
             id: String,

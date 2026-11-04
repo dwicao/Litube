@@ -33,10 +33,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val propsFile = project.findProperty("signingProperties")?.toString()?.let { file(it) }
+            if (propsFile != null && propsFile.exists()) {
+                val props = java.util.Properties().apply { propsFile.inputStream().use(::load) }
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
-            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -144,6 +157,7 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     implementation(libs.okhttp)
     implementation(libs.gson)
+    implementation(libs.coil.compose)
     implementation(libs.mmkv)
     implementation(libs.newpipe.extractor) {
         exclude(group = "org.mozilla", module = "rhino-engine")

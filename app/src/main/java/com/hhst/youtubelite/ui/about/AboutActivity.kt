@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.FileProvider
-import com.google.gson.JsonParser
 import com.hhst.youtubelite.R
 import com.hhst.youtubelite.diagnostics.AppLog
 import com.hhst.youtubelite.diagnostics.DiagnosticOutcome
@@ -32,8 +31,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.koin.java.KoinJavaComponent.get
 
 class AboutActivity : ComponentActivity() {
@@ -85,21 +82,15 @@ class AboutActivity : ComponentActivity() {
             AboutScreen(applicationInfo.loadLabel(packageManager).toString(), version, { finish() }, busy, status,
                 onSource = { openUrl(SOURCE) },
                 onUpdate = { action("check_update") {
-                    val latest = withContext(Dispatchers.IO) {
-                        val request = Request.Builder().url("https://api.github.com/repos/HydeYYHH/litube/releases/latest")
-                            .header("Accept", "application/vnd.github+json").build()
-                        get<OkHttpClient>(OkHttpClient::class.java).newCall(request).execute().use { response ->
-                            check(response.isSuccessful) { "HTTP ${response.code}" }
-                            val body = response.body?.string() ?: error("Empty release response")
-                            val json = JsonParser.parseString(body).asJsonObject
-                            check(!json.get("prerelease").asBoolean && !json.get("draft").asBoolean)
-                            json.get("tag_name").asString
+                    when (val result = UpdateChecker.check(get(), version)) {
+                        is UpdateResult.Available -> {
+                            val info = result.info
+                            openUrl(info.apkUrl)
+                            getString(R.string.about_update_available, info.version)
                         }
-                    }
-                    when {
-                        StableVersion.isDevelopment(version) -> getString(R.string.about_development_version, latest)
-                        StableVersion.isNewer(version, latest) -> getString(R.string.about_update_available, latest)
-                        else -> getString(R.string.about_up_to_date, latest)
+                        is UpdateResult.UpToDate -> getString(R.string.about_up_to_date, result.latest)
+                        is UpdateResult.Development -> getString(R.string.about_development_version, result.latest)
+                        is UpdateResult.Failure -> getString(R.string.about_operation_failed)
                     }
                 } },
                 onRelease = { openUrl("$SOURCE/releases/latest") },
@@ -156,5 +147,5 @@ class AboutActivity : ComponentActivity() {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             .onFailure { Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show() }
     }
-    companion object { private const val SOURCE = "https://github.com/HydeYYHH/litube" }
+    companion object { private const val SOURCE = "https://github.com/dwicao/Litube" }
 }

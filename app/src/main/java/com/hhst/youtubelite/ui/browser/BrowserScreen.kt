@@ -77,6 +77,7 @@ import com.hhst.youtubelite.browser.WatchPage
 import com.hhst.youtubelite.browser.WebViewFactory
 import com.hhst.youtubelite.browser.TransientUi
 import com.hhst.youtubelite.browser.TransientKind
+import com.hhst.youtubelite.nativebrowse.NativeBrowseScreen
 import androidx.compose.ui.graphics.graphicsLayer
 import com.hhst.youtubelite.core.HapticsController
 import com.hhst.youtubelite.downloader.core.BatchSnapshot
@@ -145,6 +146,7 @@ fun BrowserScreen(
     SideEffect { if (hosts[uiState.activeId] != null) displayedTabId = uiState.activeId }
     var showExtension by remember { mutableStateOf(false) }
     var showSettingsData by remember { mutableStateOf(false) }
+    var showNativeBrowse by remember { mutableStateOf(false) }
     var mediaMenuItem by remember { mutableStateOf<Bridge.QueueItemJson?>(null) }
     // PiP flips without a recreate; the activity pushes it through [inPipFlow].
     var inPip by remember { mutableStateOf(inPipFlow?.value == true) }
@@ -807,8 +809,22 @@ fun BrowserScreen(
                 }
         }
 
-        // The PiP window must show the video: the extension screen is an
-        // opaque full-size sheet that would otherwise cover it.
+        if (showNativeBrowse && !inPip) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                androidx.activity.compose.BackHandler { showNativeBrowse = false }
+                NativeBrowseScreen(
+                    onPlayVideo = { url ->
+                        showNativeBrowse = false
+                        viewModel.openTab(url)
+                    },
+                )
+            }
+        }
+
         if (showExtension && !inPip) {
             Box(
                 modifier = Modifier
@@ -825,6 +841,10 @@ fun BrowserScreen(
                         if (id == Extension.NAV_DOWNLOADS) {
                             showExtension = false
                             DownloadUi.openManager(context)
+                        }
+                        if (id == Extension.NAV_NATIVE_BROWSE) {
+                            showExtension = false
+                            showNativeBrowse = true
                         }
                     },
                 )

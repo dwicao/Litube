@@ -248,6 +248,8 @@ val appModule = module {
     }
     viewModelOf(::BrowserViewModel)
     viewModel { ExtensionViewModel(manager = get(), pipSupported = PipSupport.isSupported(androidContext())) }
+    single { com.hhst.youtubelite.nativebrowse.NativeBrowseRepository() }
+    viewModelOf(::com.hhst.youtubelite.nativebrowse.NativeBrowseViewModel)
 
     single {
         Room.databaseBuilder(
