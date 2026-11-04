@@ -249,17 +249,12 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
         const val ORIGIN = "https://www.youtube.com"
 
         /**
-         * Account, visitor, player URL and experiment configuration belong to the session, not to one
-         * video. Identity changes (cookies, UA, route, account index, browser configuration) and explicit
-         * recovery already refresh it earlier, so this is only the upper bound for an unchanged session.
+         * Visitor, player URL and experiment configuration belong to the session, not to one
+         * video. Identity changes (UA, route) and explicit recovery already refresh
+         * it earlier, so this is only the upper bound for an unchanged session.
          */
         private const val CONFIG_TTL_MS = 15 * 60_000L
 
-        /** Account-bearing cookies only; visitor and consent cookies churn without changing the audience. */
-        private val AUTH_COOKIE_NAMES = setOf("SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID", "LOGIN_INFO")
-        internal fun authCookies(cookies: String): String = cookies.splitToSequence(';').map { it.trim() }
-            .filter { it.substringBefore('=') in AUTH_COOKIE_NAMES }
-            .sorted().joinToString(";")
         private val CONFIG_FIELDS = setOf("INNERTUBE_CONTEXT", "INNERTUBE_API_KEY", "SESSION_INDEX",
             "DATASYNC_ID", "DELEGATED_SESSION_ID", "USER_SESSION_ID", "VISITOR_DATA", "LOGGED_IN",
             "IS_PREMIUM", "PLAYER_JS_URL", "WEB_PLAYER_CONTEXT_CONFIGS", "EXPERIMENT_FLAGS",

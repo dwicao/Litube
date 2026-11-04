@@ -53,7 +53,6 @@ import com.hhst.youtubelite.extension.ExtensionManager
 import com.hhst.youtubelite.extension.MmkvPrefStore
 import com.hhst.youtubelite.extension.PrefStore
 import com.hhst.youtubelite.extractor.AndroidChallengeSolver
-import com.hhst.youtubelite.extractor.BrowserPlayerResponses
 import com.hhst.youtubelite.extractor.Cache
 import com.hhst.youtubelite.extractor.DiskCache
 import com.hhst.youtubelite.extractor.ExtractionDiagnostics

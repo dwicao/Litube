@@ -1,6 +1,7 @@
 [versions]
 agp = "8.10.1"
 desugar_jdk_libs_nio = "2.1.5"
+javascriptengine = "1.1.1"
 kotlin = "2.2.20"
 koin = "4.1.0"
 coreKtx = "1.16.0"
@@ -22,6 +23,7 @@ workManager = "2.10.5"
 nanohttpd = "2.3.1"
 
 [libraries]
+androidx-javascriptengine = { module = "androidx.javascriptengine:javascriptengine", version.ref = "javascriptengine" }
 desugar_jdk_libs_nio = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar_jdk_libs_nio" }
 guava = { module = "com.google.guava:guava", version = "33.3.1-android" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
