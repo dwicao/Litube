@@ -25,6 +25,8 @@ class BrowserViewModelTest {
         assertEquals("searching", activeKind(model))
         assertEquals(watchId, model.uiState.value.suspendedWatchId)
         assertEquals(BackResult.Handled, model.onBack())
+        assertEquals("home", activeKind(model))
+        model.restoreWatchTab(watch)
         assertEquals(watchId, model.uiState.value.activeId)
         assertEquals(watch, restored)
         assertNull(model.uiState.value.suspendedWatchId)

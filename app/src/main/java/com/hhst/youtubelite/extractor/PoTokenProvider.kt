@@ -87,6 +87,9 @@ class PoTokenProvider(
             if (it <= 0) throw IOException("PO_INITIALIZATION_TIMEOUT")
         }
         fun loadedRuntime(): JavascriptRuntime {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+                throw java.io.IOException("PO_RUNTIME_UNAVAILABLE")
+            }
             return runtime ?: SandboxRuntime.create(app, context)
                 ?.also {
                     runtime = it
