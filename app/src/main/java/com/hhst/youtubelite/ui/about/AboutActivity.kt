@@ -31,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import org.koin.java.KoinJavaComponent.get
 
 class AboutActivity : ComponentActivity() {
@@ -82,7 +83,7 @@ class AboutActivity : ComponentActivity() {
             AboutScreen(applicationInfo.loadLabel(packageManager).toString(), version, { finish() }, busy, status,
                 onSource = { openUrl(SOURCE) },
                 onUpdate = { action("check_update") {
-                    when (val result = UpdateChecker.check(get<okhttp3.OkHttpClient>(), version)) {
+                    when (val result = UpdateChecker.check(get<OkHttpClient>(OkHttpClient::class.java), version)) {
                         is UpdateResult.Available -> {
                             val info = result.info
                             openUrl(info.apkUrl)
