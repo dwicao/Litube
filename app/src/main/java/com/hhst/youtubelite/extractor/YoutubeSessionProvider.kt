@@ -114,6 +114,9 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
             val parseStarted = System.nanoTime()
             val parsed = parseConfig(html)
             diagnostics?.event("page-parse", "WEB", "configuration", (System.nanoTime() - parseStarted) / 1_000_000, 200)
+            if (!parsed.has("INNERTUBE_CONTEXT") || !parsed.has("INNERTUBE_API_KEY")) {
+                throw IOException("SESSION_CONFIG_EMPTY")
+            }
             val js = parsed.getString("PLAYER_JS_URL") ?: Regex("\"jsUrl\"\\s*:\\s*\"([^\"]+)\"")
                 .find(html)?.groupValues?.get(1)?.replace("\\/", "/")
             if (js != null) parsed["PLAYER_JS_URL"] = if (js.startsWith('/')) ORIGIN + js else js
@@ -299,11 +302,7 @@ class YoutubeSessionProvider(context: Context, private val http: OkHttpClient,
                 if (challenge != null && challenge.isNotEmpty()) result["_BG_CHALLENGE"] = challenge
                 else result["_BG_CHALLENGE_RAW"] = rawChallenge
             }
-            return JsonObject(result.filterKeys { it in CONFIG_FIELDS }).also {
-                if (!it.has("INNERTUBE_CONTEXT") || !it.has("INNERTUBE_API_KEY")) {
-                    throw IOException("SESSION_CONFIG_EMPTY")
-                }
-            }
+            return JsonObject(result.filterKeys { it in CONFIG_FIELDS })
         }
 
         private fun jsonObjects(html: String, marker: Regex): Sequence<JsonObject> = objectPayloads(html, marker)
