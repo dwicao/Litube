@@ -158,7 +158,6 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     implementation(libs.okhttp)
     implementation(libs.gson)
-    implementation(libs.coil.compose)
     implementation(libs.mmkv)
     implementation(libs.newpipe.extractor) {
         exclude(group = "org.mozilla", module = "rhino-engine")

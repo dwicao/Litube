@@ -35,14 +35,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.hhst.youtubelite.R
+import com.hhst.youtubelite.ui.YoutubeThumb
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -135,11 +134,10 @@ private fun SearchBar(input: String, onInput: (String) -> Unit, onSearch: (Strin
 private fun VideoCard(item: NativeVideoItem, onPlay: (String) -> Unit) {
     Card(Modifier.fillMaxWidth().clickable { onPlay(item.url) }) {
         Column(Modifier.padding(8.dp)) {
-            AsyncImage(
-                model = item.thumbnailUrl,
+            YoutubeThumb(
+                url = item.thumbnailUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop,
             )
             Spacer(Modifier.height(8.dp))
             Text(item.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -158,11 +156,10 @@ private fun VideoCard(item: NativeVideoItem, onPlay: (String) -> Unit) {
 @Composable
 private fun ChannelRow(item: NativeChannelItem, onOpen: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        AsyncImage(
-            model = item.avatarUrl,
+        YoutubeThumb(
+            url = item.avatarUrl,
             contentDescription = null,
             modifier = Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)),
-            contentScale = ContentScale.Crop,
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -178,11 +175,10 @@ private fun ChannelRow(item: NativeChannelItem, onOpen: () -> Unit) {
 private fun PlaylistCard(item: NativePlaylistItem, onOpen: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = item.thumbnailUrl,
+            YoutubeThumb(
+                url = item.thumbnailUrl,
                 contentDescription = null,
                 modifier = Modifier.size(96.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
