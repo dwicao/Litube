@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Native engine. -->
+    <uses-sdk tools:overrideLibrary="androidx.javascriptengine" />
     <uses-feature android:name="android.software.picture_in_picture" android:required="false" />
 
     <uses-permission android:name="android.permission.INTERNET" />
